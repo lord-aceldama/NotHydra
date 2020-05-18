@@ -5,24 +5,25 @@ sudo apt install -y python3 build-essential libssl-dev libffi-dev python-dev pyt
 echo -e "\e[35mDone!\e[0m"
 
 echo -e "\e[35mCreating virtual environment...\e[0m"
+#-- Create Environment
 python3 -m venv venv
+
+#-- Create bash shim for python script
+cat << EOF > NotHydra
+#!/bin/bash
+#$( pwd )/venv/bin/python $( pwd )/NotHydra.py "\$@"
+. venv/bin/activate
+venv/bin/python NotHydra.py "\$@"
+deactivate
+EOF
+chmod +x NotHydra
 echo -e "\e[35mDone!\e[0m"
 
-echo -e "\e[35mInstalling pips...\e[0m"
+echo -e "\e[35mInstalling pip dependencies...\e[0m"
 . venv/bin/activate
 pip install -r required.txt
 deactivate
 echo -e "\e[35mDone!\e[0m"
-
-echo -e "\e[35mFinalizing install...\e[0m"
-#cat << EOF > NotHydra
-##!/bin/bash
-#$( pwd )/venv/bin/python $( pwd )/NotHydra.py "\$@"
-#EOF
-#sudo ln -s "$( pwd )/NotHydra" "/usr/bin"
-chmod +x NotHydra.py
-sed -i "1s?.*?#!$(pwd)/venv/bin/python?" NotHydra.py
-mv NotHydra.py NotHydra
 echo -e "\e[35mInstallation complete! :)\e[0m"
 echo
 echo
