@@ -225,7 +225,7 @@ class Commandline():
 
     def help(self, text=None):
         """ Shows help with an error message (if provided). """
-        print("GBH HALP:")
+        print("NOT_HYDRA HALP:")
         if not text is None:
            print("  ERROR: {}\n".format(text))
         
