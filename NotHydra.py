@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 from html.parser import HTMLParser
 import requests
 import sys
@@ -266,7 +266,7 @@ if IsOnline():
     proxy = None
     if args.is_set("-tor"):
         tor_socks = "socks5h://{}".format(args.value["-tor"])
-        proxy = { "http": tor_socks, "https": tor_socks, "ftp": tor_socks }
+        proxy = { "http": tor_socks, "https": tor_socks }
 
     #-- Main
     if args.is_set("-ip"):
