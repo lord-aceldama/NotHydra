@@ -1,0 +1,10 @@
+#!/bin/bash
+
+chmod +x NotHydra
+python3 -m venv venv
+source venv/bin/activate
+pip install -r required.txt
+deactivate
+rm required
+rm -rf .git
+rm install
