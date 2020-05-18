@@ -4,7 +4,7 @@ echo -e "\e[35mInstalling apt dependencies...\e[0m"
 sudo apt install -y python3 build-essential libssl-dev libffi-dev python-dev python-pip
 echo -e "\e[35mDone!\e[0m"
 
-echo "\e[35mCreating virtual environment...\e[0m"
+echo -e "\e[35mCreating virtual environment...\e[0m"
 python3 -m venv venv
 echo -e "\e[35mDone!\e[0m"
 
@@ -17,7 +17,6 @@ echo -e "\e[35mDone!\e[0m"
 echo -e "\e[35mFinalizing install...\e[0m"
 cat << EOF > NotHydra
 #!/bin/bash
-$( pwd )/venv/bin/python $( pwd )/NotHydra.py "\$\@"
 EOF
 sudo ln -s "$( pwd )/NotHydra" "/usr/bin"
 chmod +x NotHydra
