@@ -21,8 +21,7 @@ echo -e "\e[35mFinalizing install...\e[0m"
 #EOF
 #sudo ln -s "$( pwd )/NotHydra" "/usr/bin"
 chmod +x NotHydra.py
-var="#\!$( pwd )/venv/bin/python"
-sed -i "1s/.*/$var/" NotHydra.py
+sed -i sed -i "1s?.*?#!$(pwd)/venv/bin/python?" NotHydra.py
 mv NotHydra.py NotHydra
 echo -e "\e[35mInstallation complete! :)\e[0m"
 echo
