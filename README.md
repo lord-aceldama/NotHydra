@@ -7,11 +7,14 @@ GNU v3.0
 # Install
 ```sh
 git clone https://github.com/lord-aceldama/NotHydra.git
-chmod +x NotHydra/NotHydra.py
-sudo ln -s NotHydra/NotHydra.py /usr/bin/NotHydra
+cd NotHydra
+bash install
 ```
 
 # Usage
 ```sh
-NotHydra.py -h
+source venv/bin/activate
+NotHydra -h
 ```
+
+To exit the virtual environment just type `deactivate`
