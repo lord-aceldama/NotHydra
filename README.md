@@ -1,5 +1,6 @@
 # NotHydra
-This is not Hydra. It is a substitute to simplify the hydra brute-forcing process by automating form retrieval and allowing use with TOR.
+This is not THC Hydra. It is a substitute to simplify the hydra brute-forcing process by
+automating form retrieval and allowing seamless TOR integration.
 
 # License
 GNU v3.0

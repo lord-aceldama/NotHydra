@@ -274,12 +274,12 @@ if IsOnline():
         try:
             #-- Fetch clearnet IP
             r = requests.get(GET_IP, verify=f_badssl)
-            print("  {} IP: {}".format(src, r.content.decode("utf-8").strip()))
+            print("  {} IP: {}".format(src, r.text.strip()))
             if not proxy is None:
                 #-- Fetch TOR IP
                 src = "TOR"
                 r = requests.get(GET_IP, proxies=proxy, verify=f_badssl)
-                print("  {} IP: {}".format(src, r.content.decode("utf-8").strip()))
+                print("  {} IP: {}".format(src, r.text.strip()))
         except requests.exceptions.HTTPError as err:
             print("  ERROR: Trouble getting {} IP from '{}'.".format(src.lower(), GET_IP))
             print("    ->", err)
