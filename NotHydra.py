@@ -244,20 +244,43 @@ class Commandline():
 
 
 #=========================================================================================================[ METHODS ]==
-def IsOnline() -> bool:
+def is_online() -> bool:
+    """ Returns True if google is reachable
+    """
+    result = False
     try:
         r = requests.get('http://www.google.com/')
-        return True
+        result = True
     except requests.exceptions.HTTPError as err:
-        return False
+        result = False
 
+    return result
+
+
+def print_ips(f_badssl, proxy):
+    """ Prints the Clear-net IP ans well as the Proxy-IP if a proxy is provided.
+    """
+    src = "NET"
+    try:
+        #-- Fetch clearnet IP
+        r = requests.get(GET_IP, verify=f_badssl)
+        print("  {} IP: {}".format(src, r.text.strip()))
+        if not proxy is None:
+            #-- Fetch TOR IP
+            src = "TOR"
+            r = requests.get(GET_IP, proxies=proxy, verify=f_badssl)
+            print("  {} IP: {}".format(src, r.text.strip()))
+    except requests.exceptions.RequestException as err:
+        print("  ERROR: Trouble getting {} IP from '{}'.".format(src.lower(), GET_IP))
+        print("    ->", err)
+    print("\n")
 
 #============================================================================================================[ MAIN ]==
 #   - https://kushaldas.in/posts/using-python-to-access-onion-network-over-socks-proxy.html
 #   - https://stackoverflow.com/questions/55649421/how-to-check-if-there-is-internet-connection
 
 args = Commandline("-h")
-if IsOnline():
+if is_online():
     #-- Set flags
     f_badssl = args.is_set("-badssl")
 
@@ -270,20 +293,7 @@ if IsOnline():
     #-- Main
     if args.is_set("-ip"):
         #-- Print the IP and exit
-        src = "NET"
-        try:
-            #-- Fetch clearnet IP
-            r = requests.get(GET_IP, verify=f_badssl)
-            print("  {} IP: {}".format(src, r.text.strip()))
-            if not proxy is None:
-                #-- Fetch TOR IP
-                src = "TOR"
-                r = requests.get(GET_IP, proxies=proxy, verify=f_badssl)
-                print("  {} IP: {}".format(src, r.text.strip()))
-        except requests.exceptions.HTTPError as err:
-            print("  ERROR: Trouble getting {} IP from '{}'.".format(src.lower(), GET_IP))
-            print("    ->", err)
-        print("\n")
+        print_ips(f_badssl, proxy)
     elif args.is_set("-url"):
         #-- Attack!
 
