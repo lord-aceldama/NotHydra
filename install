@@ -15,12 +15,15 @@ deactivate
 echo -e "\e[35mDone!\e[0m"
 
 echo -e "\e[35mFinalizing install...\e[0m"
-cat << EOF > NotHydra
-#!/bin/bash
-$( pwd )/venv/bin/python $( pwd )/NotHydra.py "\$@"
-EOF
-sudo ln -s "$( pwd )/NotHydra" "/usr/bin"
-chmod +x NotHydra
+#cat << EOF > NotHydra
+##!/bin/bash
+#$( pwd )/venv/bin/python $( pwd )/NotHydra.py "\$@"
+#EOF
+#sudo ln -s "$( pwd )/NotHydra" "/usr/bin"
+chmod +x NotHydra.py
+var="#\!$( pwd )/venv/bin/python"
+sed -i "1s/.*/$var/" NotHydra.py
+mv NotHydra.py NotHydra
 echo -e "\e[35mInstallation complete! :)\e[0m"
 echo
 echo
