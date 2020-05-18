@@ -17,6 +17,7 @@ echo -e "\e[35mDone!\e[0m"
 echo -e "\e[35mFinalizing install...\e[0m"
 cat << EOF > NotHydra
 #!/bin/bash
+$( pwd )/venv/bin/python $( pwd )/NotHydra.py "\$@"
 EOF
 sudo ln -s "$( pwd )/NotHydra" "/usr/bin"
 chmod +x NotHydra
