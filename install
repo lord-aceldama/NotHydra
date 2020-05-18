@@ -1,10 +1,24 @@
 #!/bin/bash
 
-chmod +x NotHydra
+echo "Installing apt dependencies..."
+sudo apt install -y python3 build-essential libssl-dev libffi-dev python-dev pip
+echo "Done"
+
+echo "Creating virtual environment..."
 python3 -m venv venv
-source venv/bin/activate
+echo "Done"
+
+echo "Installing pips..."
+. venv/bin/activate
 pip install -r required.txt
 deactivate
-rm required
-rm -rf .git
-rm install
+echo "Done"
+
+echo "Installing..."
+cat << EOF > NotHydra
+#!/bin/bash
+$( pwd )/venv/bin/python NotHydra.py "$@"
+EOF
+sudo ln -s "$( pwd )/NotHydra" "/usr/bin"
+echo "Installation complete!"
+echo
