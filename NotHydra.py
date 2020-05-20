@@ -19,13 +19,15 @@ SPLASH = """
 
 #----------------------------------------------------------------------------------------------------------------------
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0"
-GET_IP = "http://icanhazip.com/"
+GET_IP = "http://icanhazip.com/"    #-- others: [ https://ifconfig.me/ip, https://ifconfig.me/all ]
 CMD_LN = {
     "-h"        : (None, "Shows this help menu.", None, "Help"),
-    "-ip"       : (None, "Gets the ip from {} and exits immediately.".format(GET_IP), "-tor", "Get IP"),
     "-badssl"   : (None, "Ignore bad ssl certificates.", None, ""),
+    "-getip"    : ([str], "Override for {}".format(GET_IP), "-ip", "Get IP"),
+    "-ip"       : (None, "Gets the ip from {} and exits immediately.".format(GET_IP), "-tor", "Get IP"),
     "-tor"      : ([str], "The TOR control ip and port, eg. localhost:9050", "-ip", "TOR"),
     "-url"      : ([str], "The url containing the login form. (required)", None, "Form Url"),
+
     "-test"     : ([str, str], "A valid user/pass combination to test.", None, "Valid User"),
     "-u"        : ([str], "The user to target.", "-U", "User"),
     "-U"        : ([str], "A file with a list of users to target.", "-u", "Userlist"),
@@ -34,7 +36,6 @@ CMD_LN = {
     "-r"        : ([int], "Line number in wordlist to resume at.", "-R", "Resume at index"),
     "-R"        : ([str], "Word in wordlist to resume at.", "-r", "Resume at word"),
     "-len"      : ([int, int], "Min-max length inclusive.", "-c", "Password length"),
-    "-getip"    : ([str], "Override for {}".format(GET_IP), "-ip", "Get IP"),
     "-c"        : ([str], "Characters allowed in the password.", "-len", "Charset"),
     "-true"     : ([str], "String in response body if user/password is correct.", "-false", "Success"),
     "-false"    : ([str], "String in response body if user/password is wrong.", "-true", "Failed"),
@@ -65,8 +66,8 @@ class HtmlForms(HTMLParser):
         if self._L is None:
             self._L = list()
             for form in self._forms:
-                if form[0]:
-                    self._L.append(form[1:])
+                if not form[0] is None:
+                    self._L.append(form)
 
         return self._L
 
@@ -89,15 +90,21 @@ class HtmlForms(HTMLParser):
             self._is_in_form = True
             self._forms.append([False, {  k : v for k,v in attrs }])
         elif self._is_in_form and ("name" in [ k  for k, v in attrs ]):
-            L = dict({"name" : None, "value" : None})
+            tag_name = None
+            tag_type = None
+            tag_value = None
             for k,v in attrs:
-                if (k == "type"):
-                    if (v == "password"):
-                        self._forms[-1][0] = True
-                elif k in ["name", "value"]:
-                    L[k] = v
+                if k == "type":
+                    tag_type = v
+                elif k  == "name":
+                    tag_name = v
+                elif k  == "value":
+                    tag_value = v
 
-            self._forms[-1].append(L)
+            if (tag_type == "password"):
+                self._forms[-1][0] = tag_name
+
+            self._forms[-1].append(dict({tag_name:tag_value, "type":tag_type}))
 
         return
 
@@ -214,6 +221,24 @@ class Commandline():
         """ Returns true if an arg is present. """
         return key in self._keysused
 
+    def require_one(self, *args:str):
+        """ Returns True if at least one of the args are present. """
+        i = 0
+        result = False
+        while (not result) or (i < len(args)):
+            result = self.is_set(args[i])
+            i = i + 1
+        return result
+
+    def require_all(self, *args:str):
+        """ Returns True if all of the args are present. """
+        i = 0
+        result = True
+        while result and (i < len(args)):
+            result = self.is_set(args[i])
+            i = i + 1
+        return result
+
     def get(self, key:str):
         """ Returns a value if it is set, or None if not. """
         result = None 
@@ -277,27 +302,34 @@ def print_ips(f_badssl, proxy):
 
 #============================================================================================================[ MAIN ]==
 #   - https://kushaldas.in/posts/using-python-to-access-onion-network-over-socks-proxy.html
-#   - https://stackoverflow.com/questions/55649421/how-to-check-if-there-is-internet-connection
 
 args = Commandline("-h")
 if is_online():
     #-- Set flags
     f_badssl = args.is_set("-badssl")
 
+    #-- Override IP-check page
+    GET_IP = args.get("-getip") if args.is_set("-getip") else GET_IP
+
     #-- Set the proxy
     proxy = None
     if args.is_set("-tor"):
         tor_socks = "socks5h://{}".format(args.value["-tor"][0])
-        proxy = { "http": tor_socks, "https": tor_socks }
+        proxy = { "http": tor_socks, "https": tor_socks, "ftp": tor_socks }
 
     #-- Main
     if args.is_set("-ip"):
         #-- Print the IP and exit
         print_ips(f_badssl, proxy)
     elif args.is_set("-url"):
-        #-- Attack!
-
-        pass
+        #-- Prepare for an attack
+        L = list()
+        for i in range(3):
+            r = requests.get(args.get("-url")[0], proxies=proxy, verify=f_badssl)
+            f = HtmlForms(r.text)
+            L.append(f.password_forms)
+        for i in range(len(L)):
+            print(L[i][0])
     else:
         pass
 else:
