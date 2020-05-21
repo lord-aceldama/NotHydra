@@ -37,13 +37,13 @@ CMD_LN = {
     "-R"        : ([str], "Word in wordlist to resume at.", "-r", "Resume at word"),
     "-len"      : ([int, int], "Min-max length inclusive.", "-c", "Password length"),
     "-c"        : ([str], "Characters allowed in the password.", "-len", "Charset"),
-    "-true"     : ([str], "String in response body if user/password is correct.", "-false", "Success"),
-    "-false"    : ([str], "String in response body if user/password is wrong.", "-true", "Failed"),
+    "-true"     : ([str], "String in response body if user/password is correct.", "-false, -verify", "Success"),
+    "-false"    : ([str], "String in response body if user/password is wrong.", "-true, -verify", "Failed"),
     "-ua"       : ([str], "Custom UserAgent string to use.", None, ""),
     "-cookie"   : ([str], "Custom cookie to use.", None, ""),
     "-head"     : ([str, str], "Custom HTTP header to send.", None, ""),
     "-loot"     : ([str], "Filename to dump successful results in.", None, ""),
-    "-verify"   : ([int], "Verify result N times.", None, ""),
+    "-verify"   : ([int], "Verify result N times.", "-true, -false", ""),
     "-threads"  : ([int], "Number of parallel threads.", None, "")
 }
 
@@ -327,9 +327,11 @@ if is_online():
         for i in range(3):
             r = requests.get(args.get("-url")[0], proxies=proxy, verify=f_badssl)
             f = HtmlForms(r.text)
+            print(f.password_forms[0])
             L.append(f.password_forms)
-        for i in range(len(L)):
-            print(L[i][0])
+        
+        #for i in range(len(L)):
+        #    print(L[i][0])
     else:
         pass
 else:
