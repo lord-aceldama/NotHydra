@@ -18,33 +18,36 @@ SPLASH = """
 {}\n\n""".format("(v{})".format(VERSION).rjust(50))
 
 #----------------------------------------------------------------------------------------------------------------------
+VERBOSITY = 3   # ( FAIL:0, INFO:1, WARN:2, DEBUG:3 )
+
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0"
 GET_IP = "http://icanhazip.com/"    #-- others: [ https://ifconfig.me/ip, https://ifconfig.me/all ]
 CMD_LN = {
-    "-h"        : (None, "Shows this help menu.", None, "Help"),
-    "-badssl"   : (None, "Ignore bad ssl certificates.", None, ""),
-    "-getip"    : ([str], "Override for {}".format(GET_IP), "-ip", "Get IP"),
-    "-ip"       : (None, "Gets the ip from {} and exits immediately.".format(GET_IP), "-tor", "Get IP"),
-    "-tor"      : ([str], "The TOR control ip and port, eg. localhost:9050", "-ip", "TOR"),
-    "-url"      : ([str], "The url containing the login form. (required)", None, "Form Url"),
+    "-h"        : (None, "Shows this help menu.", None),
+    "-badssl"   : (None, "Ignore bad ssl certificates.", None),
+    "-getip"    : ([str], "Override for {}".format(GET_IP), "-ip"),
+    "-ip"       : (None, "Gets the ip from {} and exits immediately.".format(GET_IP), "-tor"),
+    "-tor"      : ([str], "The TOR control ip and port, eg. localhost:9050", "-ip"),
+    "-url"      : ([str], "The url containing the login form. (required)", None),
 
-    "-test"     : ([str, str], "A valid user/pass combination to test.", None, "Valid User"),
-    "-u"        : ([str], "The user to target.", "-U", "User"),
-    "-U"        : ([str], "A file with a list of users to target.", "-u", "Userlist"),
-    "-w"        : ([str], "A file with a list of passwords to test.", "-W", "Wordlist"),
-    #"-W"        : ([str], "A url containing a list of passwords to test.", "-w", "Remote wordlist"),
-    "-r"        : ([int], "Line number in wordlist to resume at.", "-R", "Resume at index"),
-    "-R"        : ([str], "Word in wordlist to resume at.", "-r", "Resume at word"),
-    "-len"      : ([int, int], "Min-max length inclusive.", "-c", "Password length"),
-    "-c"        : ([str], "Characters allowed in the password.", "-len", "Charset"),
-    "-true"     : ([str], "String in response body if user/password is correct.", "-false, -verify", "Success"),
-    "-false"    : ([str], "String in response body if user/password is wrong.", "-true, -verify", "Failed"),
-    "-ua"       : ([str], "Custom UserAgent string to use.", None, ""),
-    "-cookie"   : ([str], "Custom cookie to use.", None, ""),
-    "-head"     : ([str, str], "Custom HTTP header to send.", None, ""),
-    "-loot"     : ([str], "Filename to dump successful results in.", None, ""),
-    "-verify"   : ([int], "Verify result N times.", "-true, -false", ""),
-    "-threads"  : ([int], "Number of parallel threads.", None, "")
+    "-test"     : ([str, str], "A valid user/pass combination to test.", None),
+    "-u"        : ([str], "The user to target.", "-U"),
+    "-U"        : ([str], "A file with a list of users to target.", "-u"),
+    "-w"        : ([str], "A file with a list of passwords to test.", "-W"),
+    #"-W"        : ([str], "A url containing a list of passwords to test.", "-w"),
+    "-r"        : ([int], "Line number in wordlist to resume at.", "-R"),
+    "-R"        : ([str], "Word in wordlist to resume at.", "-r"),
+    "-len"      : ([int, int], "Min-max length inclusive.", "-c"),
+    "-c"        : ([str], "Characters allowed in the password.", "-len"),
+    "-true"     : ([str], "String in response body if user/password is correct.", "-false, -verify"),
+    "-false"    : ([str], "String in response body if user/password is wrong.", "-true, -verify"),
+    "-ua"       : ([str], "Custom UserAgent string to use.", None),
+    "-cookie"   : ([str], "Custom cookie to use.", None),
+    "-head"     : ([str, str], "Custom HTTP header to send.", None),
+    "-loot"     : ([str], "Filename to dump successful results in.", None),
+    "-verify"   : ([int], "Verify result N times.", "-true, -false"),
+    #"-threads"  : ([int], "Number of parallel threads.", None)
+    "-v"        : ([int], "Verbosity: FAIL:0, INFO:1, WARN:2, DEBUG:3", None)
 }
 
 
@@ -269,6 +272,28 @@ class Commandline():
 
 
 #=========================================================================================================[ METHODS ]==
+def print_main(token, text, level):
+    """ X """
+    if level <= VERBOSITY:
+        print("{}: {}".format(token, text))
+
+def print_debug(text):
+    """ Prints a DEBUG message """
+    print_main("DEBUG", text, 3)
+
+def print_warn(text):
+    """ Prints a WARN message """
+    print_main("WARN", text, 2)
+
+def print_info(text):
+    """ Prints an INFO message """
+    print_main("INFO", text, 1)
+
+def print_warn(text):
+    """ Prints a FAIL message """
+    print_main("FAIL", text, 0)
+
+
 def is_online() -> bool:
     """ Returns True if google is reachable
     """
@@ -300,6 +325,117 @@ def print_ips(f_badssl, proxy):
         print("    ->", err)
     print("\n")
 
+
+def form_get(url : str, proxy, ignore_ssl_errors : bool) -> tuple:
+    """ Gets the HTML form from a given page
+    """
+
+
+def form_submit(form : tuple, proxy, ignore_ssl_errors : bool, **kwargs) -> tuple:
+    """ Submits an HTML form and retuens the headers, cookies and response body as a tuple(dict, dict, str).
+    """
+
+
+def get_test_data(user : tuple, url : str, ignore_ssl_errors : bool):
+    """ X """
+    result = None
+    if not user is None:
+        #-- Perform test submissions
+        pass
+    else:
+        print_debug("The -test flag has not been set")
+    return result
+
+
+def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
+    """ Returns the sanitized -true and -false flags and uses test data if it is provided. 
+    """
+    def is_null_or_empty(value : str) -> bool:
+        """ Returns True if value is zero-length string or None. """
+        return (value is None) or (len(value) == 0)
+
+    def get_set_tf(test_tf):
+        """ Returns sets unique to true or false logins. """
+        def get_set_intersection(text):
+            """ Returns a set of all similar lines in given text lists. """
+            result = set(text[0].replace("\r", "").split("\n"))
+            for i in range(1, len(text[0])):
+                result = set(text[0][i]).intersection(result)
+            return result
+        html_t = get_set_intersection(test_tf[0])
+        html_f = get_set_intersection(test_tf[1])
+
+        return (html_t.difference(html_f), html_f.difference(html_t))
+
+    def check_subset(value_a, value_b, flag_a, flag_b):
+        """ Makes sure value_a is not a substring of value_b """
+        result = value_a
+        if (not ((value_a is None) or (value_b is None))) and (value_a in value_b):
+            print_warn("Arg {0} is a substring of {1}. Arg {0} has been omitted.".format(flag_a, flag_b))
+            result = None
+        return result
+
+    def check_bad_flag(value, value_flag, contains, excludes):
+        """ Make sure value is found in contains, but not found in excludes. """
+        result = value
+        if not value is None:
+            flag = True
+            i = 0
+            while flag and (i < len(contains)):
+                flag = value in contains[i]
+                i = i + 1
+            if not flag:
+                result = None
+                print_warn("False-negative found in test-data for {0}, so it was omitted.".format(value_flag))
+            else:
+                i = 0
+                while flag and (i < len(excludes)):
+                    flag = not value in excludes[i]
+                    i = i + 1
+                if not flag:
+                    result = None
+                    print_warn("False-positive found in test-data for {0}, so it was omitted.".format(value_flag))
+
+        return result
+
+    check = False
+    check_t = None if is_none_or_empty(str_true) else str_true
+    check_f = None if is_none_or_empty(str_false) else str_false
+
+    #-- First check: Make sure A does not include B
+    check_t = check_subset(check_t, check_f, "-true", "-false")
+    check_f = check_subset(check_f, check_t, "-false", "-true")
+
+    if not test_tf is None:
+        #-- Second check: Make sure we eliminate false-positives
+        check_t = check_bad_flag(check_t, "-true", test_tf[0], test_tf[1])
+        check_f = check_bad_flag(check_f, "-false", test_tf[1], test_tf[0])
+
+        if (check_t is None) and (check_f is None):
+            #-- Disaster recovery: Attempt an autodetect
+            print_info("Attempting to auto-detect any unique good/bad login strings.")
+            html_t, html_f = get_set_tf(test_tf)
+            if (len(html_t) + len(html_f)) > 0:
+                check = True
+                check_t = html_t[0] if len(html_t) > 0 else None
+                check_f = html_f[0] if len(html_f) > 0 else None
+                print_info("Success!\n  -> -true: '{}'\n  -> -false: '{}'".format(check_t, check_f))
+            else:
+                print_fail("Could not auto-detect a unique good/bad login string.")
+    else:
+        #-- We don't have any test-data to work with
+        if (check_t is None) and (check_f is None):
+            print_fail("No valid unique good/bad login string passed. Consider using the -test arg.")
+        elif (check_t is None) or (check_f is None):
+            check = True
+            print_warn("Only one valid good/bad login string passed. Consider using both or using the -test arg to auto-detect them.")
+        else:
+            check = True
+            print_warn("The good/bad login strings weren't tested. Consider using -test arg to verify them.")
+
+    return tuple(check, check_t, check_f)
+
+
 #============================================================================================================[ MAIN ]==
 #   - https://kushaldas.in/posts/using-python-to-access-onion-network-over-socks-proxy.html
 
@@ -323,15 +459,18 @@ if is_online():
         print_ips(f_badssl, proxy)
     elif args.is_set("-url"):
         #-- Prepare for an attack
-        L = list()
-        for i in range(3):
-            r = requests.get(args.get("-url")[0], proxies=proxy, verify=f_badssl)
-            f = HtmlForms(r.text)
-            print(f.password_forms[0])
-            L.append(f.password_forms)
+        test_data = get_test_data(args.get("-test"), args.get("-url"))
+        good_tf, str_true, str_false = get_truefalse(args.get("-true"), args.get("-false"), test_data)
+        if args.is_set("-test"):
+            L = list()
+            for i in range(3):
+                r = requests.get(args.get("-url")[0], proxies=proxy, verify=f_badssl)
+                f = HtmlForms(r.text)
+                print(f.password_forms[0])
+                L.append(f.password_forms)
         
-        #for i in range(len(L)):
-        #    print(L[i][0])
+            #for i in range(len(L)):
+            #    print(L[i][0])
     else:
         pass
 else:
