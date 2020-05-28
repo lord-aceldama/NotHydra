@@ -78,8 +78,8 @@ def print_main(token, indent, text, level, color):
             t_text = "{}{}{}".format(colored.fg(color), t_text, colored.attr("reset"))
             t_time = "{}{}{}".format(colored.fg("#888888"), t_time, colored.attr("reset"))
         
-        if len(t_token) == 1:
-            print("{} {}".format(t_token.rjust(2 + (4 * indent)), t_text))
+        if indent > 0:
+            print("{} {}".format(t_token.rjust(4 * indent), t_text))
         else:
             print("  [{}] {}: {}".format(t_time, t_token, t_text))
 
