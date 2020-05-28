@@ -27,6 +27,9 @@ USE_COLOR = not "-plain" in sys.argv
 
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0"
 
+INDENT_WIDTH = 4
+INDENT_BULLETS = ("*", "+", "-", "")
+
 GET_IP = "http://icanhazip.com/"    #-- others: [ https://ifconfig.me/ip, https://ifconfig.me/all ]
 CMD_LN = {
     "-h"        : (None, "Shows this help menu.", None),
@@ -63,27 +66,27 @@ CMD_LN = {
 def print_main(token, indent, text, level, color):
     """ Prints messages depending on the verbosity. Also handles message clorization and indentation. """
     if level <= VERBOSITY:
+        #-- Prep strings
+        t_time = time.strftime("%H:%M:%S", time.localtime())
         t_token = ""
         if indent > 0:
-            if indent == 1:
-                t_token = "*"
-            else:
-                t_token = "-"
-            t_token = t_token.rjust(4 * indent, ' ')
+            t_token = INDENT_BULLETS[min([len(INDENT_BULLETS) - 1, indent - 1])]
+            t_token = t_token.rjust(INDENT_WIDTH * indent, ' ')
         else:
             t_token = token.upper().strip()
         t_text = text.strip()
-        t_time = time.strftime("%H:%M:%S", time.localtime())
         
+        #-- Apply paint
         if USE_COLOR:
             t_token = "{}{}{}{}".format(colored.fg(color), colored.attr("bold"), t_token, colored.attr("reset"))
             t_text = "{}{}{}".format(colored.fg(color), t_text, colored.attr("reset"))
             t_time = "{}{}{}".format(colored.fg("#888888"), t_time, colored.attr("reset"))
         
+        #-- Print product
         if indent > 0:
             print("{} {}".format(t_token, t_text))
         else:
-            print("  [{}] {}: {}".format(t_time, t_token, t_text))
+            print("[{}] {}: {}".format(t_time, t_token, t_text))
 
 def print_debug(text : str, indent : int = 0):
     """ Prints a DEBUG message """
