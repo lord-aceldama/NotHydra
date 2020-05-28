@@ -21,7 +21,7 @@ SPLASH = """
 #----------------------------------------------------------------------------------------------------------------------
 VERBOSITY = 3   # ( FAIL:0, INFO:1, WARN:2, DEBUG:3 )
 VERIFY = 3
-USE_COLOR = False
+USE_COLOR = "-color" in sys.argv
 
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0"
 
@@ -87,8 +87,8 @@ def print_fail(text):
 def print_splash():
     """ Prints the splash screen """
     if USE_COLOR:
-        fancy_splash = SPLASH.split("\n")[0:-1]
-        fancy_version = SPLASH.split("\n")[-1]
+        fancy_splash = SPLASH.split("\n")[0:-3]
+        fancy_version = "\n".join(SPLASH.split("\n")[-3:])
         i = 0
         for i in range(len(fancy_splash)):
             green = round((255 * i) / (len(fancy_splash) - 1))
@@ -470,7 +470,6 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
 #============================================================================================================[ MAIN ]==
 #   - https://kushaldas.in/posts/using-python-to-access-onion-network-over-socks-proxy.html
 
-USE_COLOR = "-color" in sys.argv
 args = Commandline("-h")
 
 if is_online():
