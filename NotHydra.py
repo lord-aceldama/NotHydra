@@ -1,4 +1,4 @@
-import termcolor
+import colored
 from html.parser import HTMLParser
 import requests
 import sys
@@ -21,6 +21,7 @@ SPLASH = """
 #----------------------------------------------------------------------------------------------------------------------
 VERBOSITY = 3   # ( FAIL:0, INFO:1, WARN:2, DEBUG:3 )
 VERIFY = 3
+USE_COLOR = False
 
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0"
 
@@ -32,8 +33,9 @@ CMD_LN = {
     "-ip"       : (None, "Gets the ip from {} and exits immediately.".format(GET_IP), "-tor"),
     "-tor"      : ([str], "The TOR control ip and port, eg. localhost:9050", "-ip"),
     "-url"      : ([str], "The url containing the login form. (required)", None),
-
+    "-color"    : (None, "Enables terminal colors.", None),
     "-test"     : ([str, str], "A valid user/pass combination to test.", None),
+
     "-u"        : ([str], "The user to target.", "-U"),
     "-U"        : ([str], "A file with a list of users to target.", "-u"),
     "-w"        : ([str], "A file with a list of passwords to test.", "-W"),
@@ -49,36 +51,51 @@ CMD_LN = {
     "-head"     : ([str, str], "Custom HTTP header to send.", None),
     "-loot"     : ([str], "Filename to dump successful results in.", None),
     "-verify"   : ([int], "Verify result N times.", "-true, -false"),
-    #"-threads"  : ([int], "Number of parallel threads.", None)
+    #"-threads"  : ([int], "Number of parallel threads.", None),
+
     "-v"        : ([int], "Verbosity: FAIL:0, INFO:1, WARN:2, DEBUG:3", None)
 }
 
 
 #==================================================================================================[ CONSOLE OUTPUT ]==
-def print_main(token, text, level):
+def print_main(token, text, level, color):
     """ X """
     if level <= VERBOSITY:
-        termcolor.cprint("{}: {}".format(token, text))
+        t_token = token.upper().strip()
+        t_text = text.strip()
+        if USE_COLOR:
+            t_token = "{}{}{}{}".format(colored.fg(color), colored.attr("bold"), t_token.upper().strip(), colored.attr("reset"))
+            t_text = "{}{}{}".format(colored.fg(color), t_text, colored.attr("reset"))
+        print("  {}:{}".format(t_token, t_text))
 
 def print_debug(text):
     """ Prints a DEBUG message """
-    print_main(termcolor.colored("DEBUG", "red", attrs=["bold"]), termcolor.colored(text, "red"), 3)
+    print_main("DEBUG", text, 3, "blue")
 
 def print_warn(text):
     """ Prints a WARN message """
-    print_main(Fore.YELLOW + "WARN", text, 2)
+    print_main("WARN", text, 2, "yellow")
 
 def print_info(text):
     """ Prints an INFO message """
-    print_main("INFO", text, 1)
+    print_main("INFO", text, 1, "gray")
 
 def print_fail(text):
     """ Prints a FAIL message """
-    print_main(termcolor.colored("DEBUG", "red", attrs=["bold"]), termcolor.colored(text, "red"), 3)
+    print_main("FAIL", text, 3, "red")
 
 def print_splash():
     """ Prints the splash screen """
-    print(SPLASH)
+    if USE_COLOR:
+        fancy_splash = SPLASH.split("\n")[0:-1]
+        fancy_version = SPLASH.split("\n")[-1]
+        i = 0
+        for i in range(len(fancy_splash)):
+            green = round((255 * i) / (len(fancy_splash) - 1))
+            print("{}{}".format(colored.fg("#FF{:02x}00".format(green)), fancy_splash[i]))
+        print("{}{}{}".format(colored.fg("blue"), fancy_version, colored.attr("reset")))
+    else:
+        print(SPLASH)
 
 
 #=========================================================================================================[ CLASSES ]==
@@ -453,15 +470,21 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
 #============================================================================================================[ MAIN ]==
 #   - https://kushaldas.in/posts/using-python-to-access-onion-network-over-socks-proxy.html
 
+USE_COLOR = "-color" in sys.argv
 args = Commandline("-h")
-if is_online():
-    #-- Set flags
-    f_badssl = args.is_set("-badssl")
 
+if is_online():
     #-- Override Constants and Defaults
     GET_IP = args.get("-getip") if args.is_set("-getip") else GET_IP
-    VERBOSITY = args.get("-v") if args.get("-v") in [0, 1, 2, 3] else VERBOSITY
     VERIFY = args.get("-verify") if args.is_set("-verify") and (args.get("-verify") > 0) else VERIFY
+    
+    if args.is_set("-v") and (args.get("-v") in [0, 1, 2, 3]):
+        VERBOSITY = args.get("-v")
+    elif args.is_set("-v"):
+        print_info("Arg -v has a value of '{}' but needs to be between 0 and 3 (inclusive).".format(args.get("-v")))
+
+    #-- Set flags
+    f_badssl = args.is_set("-badssl")
 
     #-- Set the socks5 proxy
     proxy = None
