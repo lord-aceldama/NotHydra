@@ -69,35 +69,37 @@ def print_main(token, indent, text, level, color):
                 t_token = "*"
             else:
                 t_token = "-"
+            t_token = t_token.rjust(4 * indent, ' ')
         else:
             t_token = token.upper().strip()
         t_text = text.strip()
         t_time = time.strftime("%H:%M:%S", time.localtime())
+        
         if USE_COLOR:
-            t_token = "{}{}{}{}".format(colored.fg(color), colored.attr("bold"), t_token.upper().strip(), colored.attr("reset"))
+            t_token = "{}{}{}{}".format(colored.fg(color), colored.attr("bold"), t_token, colored.attr("reset"))
             t_text = "{}{}{}".format(colored.fg(color), t_text, colored.attr("reset"))
             t_time = "{}{}{}".format(colored.fg("#888888"), t_time, colored.attr("reset"))
         
         if indent > 0:
-            print("{} {}".format(t_token.rjust(4 * indent), t_text))
+            print("{} {}".format(t_token, t_text))
         else:
             print("  [{}] {}: {}".format(t_time, t_token, t_text))
 
 def print_debug(text : str, indent : int = 0):
     """ Prints a DEBUG message """
-    print_main("DEBUG", indent, text, 3, "blue")
+    print_main("DEBUG", indent, text, 3, ("#0000ff" if indent == 0 else "#000099"))
 
 def print_warn(text : str, indent : int = 0):
     """ Prints a WARN message """
-    print_main("WARN", indent, text, 2, "yellow")
+    print_main("WARN", indent, text, 2, ("#ffff00" if indent == 0 else "#999900"))
 
 def print_info(text : str, indent : int = 0):
     """ Prints an INFO message """
-    print_main("INFO", indent, text, 1, "gray")
+    print_main("INFO", indent, text, 1, ("#aaaaaa" if indent == 0 else "#888888"))
 
 def print_fail(text : str, indent : int = 0, fatal_error : bool = True):
     """ Prints a FAIL message """
-    print_main("FAIL", indent, text, 3, "red")
+    print_main("FAIL", indent, text, 3, ("#ff0000" if indent == 0 else "#aa0000"))
 
     if fatal_error:
         #-- Exit
