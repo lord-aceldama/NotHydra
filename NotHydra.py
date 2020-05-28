@@ -3,6 +3,7 @@ from html.parser import HTMLParser
 import os
 import requests
 import sys
+import time
 
 
 #================================================================================================[ GLOBAL CONSTANTS ]==
@@ -59,36 +60,49 @@ CMD_LN = {
 
 
 #==================================================================================================[ CONSOLE OUTPUT ]==
-def print_main(token, text, level, color):
-    """ X """
+def print_main(token, indent, text, level, color):
+    """ Prints messages depending on the verbosity. Also handles message clorization and indentation. """
     if level <= VERBOSITY:
-        t_token = token.upper().strip()
+        t_token = ""
+        if indent > 0:
+            if indent == 1:
+                t_token = "*"
+            else:
+                t_token = "-"
+        else:
+            t_token = token.upper().strip()
         t_text = text.strip()
+        t_time = time.strftime("%H:%M:%S", time.localtime())
         if USE_COLOR:
             t_token = "{}{}{}{}".format(colored.fg(color), colored.attr("bold"), t_token.upper().strip(), colored.attr("reset"))
             t_text = "{}{}{}".format(colored.fg(color), t_text, colored.attr("reset"))
-        print("  {}:{}".format(t_token, t_text))
+            t_time = "{}{}{}".format(colored.fg("#888888"), t_time, colored.attr("reset"))
+        
+        if len(t_token) == 1:
+            print("{} {}".format(t_token.rjust(2 + (4 * indent)), t_text))
+        else:
+            print("  [{}] {}: {}".format(t_time, t_token, t_text))
 
-def print_debug(text):
+def print_debug(text : str, indent : int = 0):
     """ Prints a DEBUG message """
-    print_main("DEBUG", text, 3, "blue")
+    print_main("DEBUG", indent, text, 3, "blue")
 
-def print_warn(text):
+def print_warn(text : str, indent : int = 0):
     """ Prints a WARN message """
-    print_main("WARN", text, 2, "yellow")
+    print_main("WARN", indent, text, 2, "yellow")
 
-def print_info(text):
+def print_info(text : str, indent : int = 0):
     """ Prints an INFO message """
-    print_main("INFO", text, 1, "gray")
+    print_main("INFO", indent, text, 1, "gray")
 
-def print_fail(text, fatal_error=True):
+def print_fail(text : str, indent : int = 0, fatal_error : bool = True):
     """ Prints a FAIL message """
-    print_main("FAIL", text, 3, "red")
+    print_main("FAIL", indent, text, 3, "red")
 
     if fatal_error:
         #-- Exit
         print("\n\n")
-        exit(1)
+        exit(0)
 
 def print_splash():
     """ Prints the splash screen """
@@ -469,6 +483,56 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
     return (check_t, check_f)
 
 
+def get_victims(single_victim, victim_file):
+    """ Builds and returns a sorted victims list. """
+    print_debug("Preparing hit-list...")
+    hit_list = set()
+
+    if not single_victim is None:
+        #-- Explicit victim
+        if not single_victim[0] in hit_list:
+            print_debug("Added '{}'".format(single_victim[0]), 1)
+            hit_list.add(single_victim[0])
+    
+    if not victim_file is None:
+        #-- Read file into attack_user
+        try:
+            print_debug("Reading victims file: '{}'.".format(victim_file[0]))
+            f = open(victim_file[0], 'r')
+            while True: 
+                line = file.readline()
+                if not line: 
+                    break
+                t_victim = line.replace("\r", "").replace("\n", "")
+                if not t_victim in hit_list:
+                    print_debug("Added '{}'".format(t_victim), 1)
+                    hit_list.add(t_victim)
+                else:
+                    print_debug("Skipped duplicate entry '{}'".format(t_victim), 1)
+            f.close()
+
+            if len(hit_list) == 0:
+                print_fail("The file specified by -U appears to be empty.")
+
+        except FileNotFoundError:
+            print_fail("The file specified by -U does not exist.")
+        except e:
+            print_fail("There was a problem processing the file specified:", fatal_error=False)
+            print_fail(str(e), 1)
+
+    if len(hit_list) == 0:
+        print_fail("No target user(s) specified (help: '-u' or '-U')")
+
+    #-- Finish up
+    if len(hit_list) == 1:
+        hit_list = list(hit_list)
+    else:
+        print_debug("Sorting hit-list...", 1)
+        hit_list = sorted(hit_list)
+    print_debug("Hit-list with [{}] name{} ready.".format(len(hit_list), ("" if len(hit_list) == 1 else "s")))
+
+    return hit_list
+
 #============================================================================================================[ MAIN ]==
 #   - https://kushaldas.in/posts/using-python-to-access-onion-network-over-socks-proxy.html
 
@@ -498,13 +562,8 @@ if is_online():
         #-- Print the IP and exit
         print_ips(f_badssl, proxy)
     elif args.is_set("-url"):
-        if args.require_one("-u", "-U"):
-            if args.is_set("-U") and not os.path.isfile(args.get("-U")):
-                print_fail("the file specified for -U does not exist.")
-        else:
-            print_fail("No target user specified ('-u- or '-U')")
-
         #-- Prepare for an attack
+        victims = get_victims(args.get("-u"), args.get("-U"))
         test_data = get_test_data(args.get("-test"), args.get("-url"), f_badssl, proxy)
         str_true, str_false = get_truefalse(args.get("-true"), args.get("-false"), test_data)
 
@@ -513,6 +572,6 @@ if is_online():
             # TODO
             pass
     else:
-        pass
+        print_fail("You need to specify a target site with -url.")
 else:
-    print("ERROR: You need an internet connection\n\n")
+    print_fail("You need an internet connection to use NotHydra.")
