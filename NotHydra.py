@@ -1,3 +1,4 @@
+import termcolor
 from html.parser import HTMLParser
 import requests
 import sys
@@ -19,8 +20,10 @@ SPLASH = """
 
 #----------------------------------------------------------------------------------------------------------------------
 VERBOSITY = 3   # ( FAIL:0, INFO:1, WARN:2, DEBUG:3 )
+VERIFY = 3
 
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0"
+
 GET_IP = "http://icanhazip.com/"    #-- others: [ https://ifconfig.me/ip, https://ifconfig.me/all ]
 CMD_LN = {
     "-h"        : (None, "Shows this help menu.", None),
@@ -49,6 +52,33 @@ CMD_LN = {
     #"-threads"  : ([int], "Number of parallel threads.", None)
     "-v"        : ([int], "Verbosity: FAIL:0, INFO:1, WARN:2, DEBUG:3", None)
 }
+
+
+#==================================================================================================[ CONSOLE OUTPUT ]==
+def print_main(token, text, level):
+    """ X """
+    if level <= VERBOSITY:
+        termcolor.cprint("{}: {}".format(token, text))
+
+def print_debug(text):
+    """ Prints a DEBUG message """
+    print_main(termcolor.colored("DEBUG", "red", attrs=["bold"]), termcolor.colored(text, "red"), 3)
+
+def print_warn(text):
+    """ Prints a WARN message """
+    print_main(Fore.YELLOW + "WARN", text, 2)
+
+def print_info(text):
+    """ Prints an INFO message """
+    print_main("INFO", text, 1)
+
+def print_fail(text):
+    """ Prints a FAIL message """
+    print_main(termcolor.colored("DEBUG", "red", attrs=["bold"]), termcolor.colored(text, "red"), 3)
+
+def print_splash():
+    """ Prints the splash screen """
+    print(SPLASH)
 
 
 #=========================================================================================================[ CLASSES ]==
@@ -169,8 +199,7 @@ class Commandline():
     def __init__(self, help_arg : str):
         """ Parses command line args. if the help-arg is supplied, it prints the help menu and exits immediately. """
         #-- Show splash screen
-        print(SPLASH)
-
+        print_splash()
         if (len(sys.argv) == 1) or (help_arg in sys.argv[1:]):
             #-- Show help and exit
             self.help()
@@ -272,28 +301,6 @@ class Commandline():
 
 
 #=========================================================================================================[ METHODS ]==
-def print_main(token, text, level):
-    """ X """
-    if level <= VERBOSITY:
-        print("{}: {}".format(token, text))
-
-def print_debug(text):
-    """ Prints a DEBUG message """
-    print_main("DEBUG", text, 3)
-
-def print_warn(text):
-    """ Prints a WARN message """
-    print_main("WARN", text, 2)
-
-def print_info(text):
-    """ Prints an INFO message """
-    print_main("INFO", text, 1)
-
-def print_warn(text):
-    """ Prints a FAIL message """
-    print_main("FAIL", text, 0)
-
-
 def is_online() -> bool:
     """ Returns True if google is reachable
     """
@@ -336,14 +343,21 @@ def form_submit(form : tuple, proxy, ignore_ssl_errors : bool, **kwargs) -> tupl
     """
 
 
-def get_test_data(user : tuple, url : str, ignore_ssl_errors : bool):
-    """ X """
+def get_test_data(test_user : tuple, url : str, ignore_ssl_errors : bool, proxy : tuple) -> list:
+    """ If a test-user is provided, return a list containing [[GOOD], [BAD]] login results. """
     result = None
-    if not user is None:
+
+    if not test_user is None:
         #-- Perform test submissions
-        pass
+        L = list()
+        for i in range(VERIFY):
+            r = requests.get(args.get("-url")[0], proxies=proxy, verify=f_badssl)
+            f = HtmlForms(r.text)
+            print(f.password_forms[0])
+            L.append(f.password_forms)
     else:
         print_debug("The -test flag has not been set")
+
     return result
 
 
@@ -399,8 +413,8 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
         return result
 
     check = False
-    check_t = None if is_none_or_empty(str_true) else str_true
-    check_f = None if is_none_or_empty(str_false) else str_false
+    check_t = None if is_null_or_empty(str_true) else str_true
+    check_f = None if is_null_or_empty(str_false) else str_false
 
     #-- First check: Make sure A does not include B
     check_t = check_subset(check_t, check_f, "-true", "-false")
@@ -433,7 +447,7 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
             check = True
             print_warn("The good/bad login strings weren't tested. Consider using -test arg to verify them.")
 
-    return tuple(check, check_t, check_f)
+    return (check, check_t, check_f)
 
 
 #============================================================================================================[ MAIN ]==
@@ -444,10 +458,12 @@ if is_online():
     #-- Set flags
     f_badssl = args.is_set("-badssl")
 
-    #-- Override IP-check page
+    #-- Override Constants and Defaults
     GET_IP = args.get("-getip") if args.is_set("-getip") else GET_IP
+    VERBOSITY = args.get("-v") if args.get("-v") in [0, 1, 2, 3] else VERBOSITY
+    VERIFY = args.get("-verify") if args.is_set("-verify") and (args.get("-verify") > 0) else VERIFY
 
-    #-- Set the proxy
+    #-- Set the socks5 proxy
     proxy = None
     if args.is_set("-tor"):
         tor_socks = "socks5h://{}".format(args.value["-tor"][0])
@@ -459,18 +475,13 @@ if is_online():
         print_ips(f_badssl, proxy)
     elif args.is_set("-url"):
         #-- Prepare for an attack
-        test_data = get_test_data(args.get("-test"), args.get("-url"))
-        good_tf, str_true, str_false = get_truefalse(args.get("-true"), args.get("-false"), test_data)
-        if args.is_set("-test"):
-            L = list()
-            for i in range(3):
-                r = requests.get(args.get("-url")[0], proxies=proxy, verify=f_badssl)
-                f = HtmlForms(r.text)
-                print(f.password_forms[0])
-                L.append(f.password_forms)
-        
-            #for i in range(len(L)):
-            #    print(L[i][0])
+        test_data = get_test_data(args.get("-test"), args.get("-url"), f_badssl, proxy)
+        good_to_go, str_true, str_false = get_truefalse(args.get("-true"), args.get("-false"), test_data)
+
+        #-- Attack!
+        if good_to_go:
+            # TODO
+            pass
     else:
         pass
 else:
