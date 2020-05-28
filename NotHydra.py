@@ -1,5 +1,6 @@
 import colored
 from html.parser import HTMLParser
+import os
 import requests
 import sys
 
@@ -21,7 +22,7 @@ SPLASH = """
 #----------------------------------------------------------------------------------------------------------------------
 VERBOSITY = 3   # ( FAIL:0, INFO:1, WARN:2, DEBUG:3 )
 VERIFY = 3
-USE_COLOR = "-color" in sys.argv
+USE_COLOR = not "-plain" in sys.argv
 
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0"
 
@@ -33,7 +34,7 @@ CMD_LN = {
     "-ip"       : (None, "Gets the ip from {} and exits immediately.".format(GET_IP), "-tor"),
     "-tor"      : ([str], "The TOR control ip and port, eg. localhost:9050", "-ip"),
     "-url"      : ([str], "The url containing the login form. (required)", None),
-    "-color"    : (None, "Enables terminal colors.", None),
+    "-plain"    : (None, "Disables terminal colors for terminals that doesn't support it.", None),
     "-test"     : ([str, str], "A valid user/pass combination to test.", None),
 
     "-u"        : ([str], "The user to target.", "-U"),
@@ -80,9 +81,14 @@ def print_info(text):
     """ Prints an INFO message """
     print_main("INFO", text, 1, "gray")
 
-def print_fail(text):
+def print_fail(text, fatal_error=True):
     """ Prints a FAIL message """
     print_main("FAIL", text, 3, "red")
+
+    if fatal_error:
+        #-- Exit
+        print("\n\n")
+        exit(1)
 
 def print_splash():
     """ Prints the splash screen """
@@ -91,8 +97,7 @@ def print_splash():
         fancy_version = "\n".join(SPLASH.split("\n")[-3:])
         i = 0
         for i in range(len(fancy_splash)):
-            green = round((255 * i) / (len(fancy_splash) - 1))
-            print("{}{}".format(colored.fg("#FF{:02x}00".format(green)), fancy_splash[i]))
+            print("{}{}{}".format(colored.fg("#FF{:02x}00".format(round((200 * i) / (len(fancy_splash) - 1)))), fancy_splash[i], colored.attr("reset")))
         print("{}{}{}".format(colored.fg("blue"), fancy_version, colored.attr("reset")))
     else:
         print(SPLASH)
@@ -429,7 +434,7 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
 
         return result
 
-    check = False
+    #-- Init check strings
     check_t = None if is_null_or_empty(str_true) else str_true
     check_f = None if is_null_or_empty(str_false) else str_false
 
@@ -447,7 +452,6 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
             print_info("Attempting to auto-detect any unique good/bad login strings.")
             html_t, html_f = get_set_tf(test_tf)
             if (len(html_t) + len(html_f)) > 0:
-                check = True
                 check_t = html_t[0] if len(html_t) > 0 else None
                 check_f = html_f[0] if len(html_f) > 0 else None
                 print_info("Success!\n  -> -true: '{}'\n  -> -false: '{}'".format(check_t, check_f))
@@ -458,13 +462,11 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
         if (check_t is None) and (check_f is None):
             print_fail("No valid unique good/bad login string passed. Consider using the -test arg.")
         elif (check_t is None) or (check_f is None):
-            check = True
             print_warn("Only one valid good/bad login string passed. Consider using both or using the -test arg to auto-detect them.")
         else:
-            check = True
             print_warn("The good/bad login strings weren't tested. Consider using -test arg to verify them.")
 
-    return (check, check_t, check_f)
+    return (check_t, check_f)
 
 
 #============================================================================================================[ MAIN ]==
@@ -496,9 +498,15 @@ if is_online():
         #-- Print the IP and exit
         print_ips(f_badssl, proxy)
     elif args.is_set("-url"):
+        if args.require_one("-u", "-U"):
+            if args.is_set("-U") and not os.path.isfile(args.get("-U")):
+                print_fail("the file specified for -U does not exist.")
+        else:
+            print_fail("No target user specified ('-u- or '-U')")
+
         #-- Prepare for an attack
         test_data = get_test_data(args.get("-test"), args.get("-url"), f_badssl, proxy)
-        good_to_go, str_true, str_false = get_truefalse(args.get("-true"), args.get("-false"), test_data)
+        str_true, str_false = get_truefalse(args.get("-true"), args.get("-false"), test_data)
 
         #-- Attack!
         if good_to_go:
@@ -508,4 +516,3 @@ if is_online():
         pass
 else:
     print("ERROR: You need an internet connection\n\n")
-
