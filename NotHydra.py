@@ -73,8 +73,7 @@ def print_main(token, indent, text, level, color):
         t_time = time.strftime("%H:%M:%S", time.localtime())
         t_token = ""
         if indent > 0:
-            t_token = INDENT_BULLETS[min([len(INDENT_BULLETS) - 1, indent - 1])]
-            t_token = t_token.rjust(INDENT_WIDTH * indent, ' ')
+            t_token = INDENT_BULLETS[min([len(INDENT_BULLETS) - 1, indent - 1])].ljust(2).rjust(INDENT_WIDTH * indent)
         else:
             t_token = token.upper().strip()
         t_text = text.strip()
@@ -86,11 +85,20 @@ def print_main(token, indent, text, level, color):
             t_time = "{}{}{}".format(colored.fg("#888888"), t_time, colored.attr("reset"))
         
         #-- Print product
+        # First line
+        t_text = t_text.split("\n")
         if indent > 0:
-            print("{} {}".format(t_token, t_text))
+            print("{}{}".format(t_token, t_text[0]))
         else:
-            print("[{}] {}: {}".format(t_time, t_token, t_text))
+            print("[{}] {}: {}".format(t_time, t_token, t_text[0]))
 
+        # Subsequent lines
+        if len(t_text) > 1:
+            no_token = "".rjust(INDENT_WIDTH * indent) if indent > 0 else "".rjust(4 + len(t_time))
+            for i in range(1, len(t_text)):
+                print("{} {}".format(no_token, t_text[i]))
+
+    #-- Result
     return printed
 
 def print_debug(text : str, indent : int = 0):
@@ -376,8 +384,8 @@ def print_ips(f_badssl, proxy):
             r = requests.get(GET_IP, proxies=proxy, verify=f_badssl)
             print("  {} IP: {}".format(src, r.text.strip()))
     except requests.exceptions.RequestException as err:
-        print("  ERROR: Trouble getting {} IP from '{}'.".format(src.lower(), GET_IP))
-        print("    ->", err)
+        print_fail("Trouble getting {} IP from '{}'.".format(src.lower(), GET_IP), fatal_error = False)
+        print_fail(str(err), 1)
     print("\n")
 
 
@@ -579,11 +587,15 @@ if is_online():
     #-- Set flags
     f_badssl = args.is_set("-badssl")
 
-    #-- Set the socks5 proxy
+    #-- Set up the socks5 proxy
     proxy = None
     if args.is_set("-tor"):
+        print_debug("Using Tor [ {} ]".format(args.value["-tor"][0]))
         tor_socks = "socks5h://{}".format(args.value["-tor"][0])
         proxy = { "http": tor_socks, "https": tor_socks, "ftp": tor_socks }
+    else:
+        print_warning("Not using Tor")
+
 
     #-- Main
     if args.is_set("-ip"):
