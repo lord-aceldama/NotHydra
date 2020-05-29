@@ -1,4 +1,4 @@
-import colored
+import colored  #-- See: https://pypi.org/project/colored/
 from html.parser import HTMLParser
 import os
 import requests
@@ -21,18 +21,15 @@ SPLASH = """
 {}\n\n""".format("(v{})".format(VERSION).rjust(50))
 
 #----------------------------------------------------------------------------------------------------------------------
-VERBOSITY = 3   # ( FAIL:0, INFO:1, WARN:2, DEBUG:3 )
 VERIFY = 3
-USE_COLOR = not "-plain" in sys.argv
 
+DEFAULT_VERBOSITY = 3   # ( FAIL:0, INFO:1, WARN:2, DEBUG:3 )
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:76.0) Gecko/20100101 Firefox/76.0"
-
-INDENT_WIDTH = 4
-INDENT_BULLETS = ("*", "+", "-", "")
 
 GET_IP = "http://icanhazip.com/"    #-- others: [ https://ifconfig.me/ip, https://ifconfig.me/all ]
 CMD_LN = {
     "-h"        : (None, "Shows this help menu.", None),
+    "-H"        : (None, "Shows this help menu with args sorted alphabetically.", None),
     "-badssl"   : (None, "Ignore bad ssl certificates.", None),
     "-getip"    : ([str], "Override for {}".format(GET_IP), "-ip"),
     "-ip"       : (None, "Gets the ip from {} and exits immediately.".format(GET_IP), "-tor"),
@@ -40,22 +37,22 @@ CMD_LN = {
     "-url"      : ([str], "The url containing the login form. (required)", None),
     "-plain"    : (None, "Disables terminal colors for terminals that doesn't support it.", None),
     "-test"     : ([str, str], "A valid user/pass combination to test.", None),
-
     "-u"        : ([str], "The user to target.", "-U"),
     "-U"        : ([str], "A file with a list of users to target.", "-u"),
+    "-verify"   : ([int], "Verify result N times.", "-true", "-false"),
+
     "-w"        : ([str], "A file with a list of passwords to test.", "-W"),
     #"-W"        : ([str], "A url containing a list of passwords to test.", "-w"),
     "-r"        : ([int], "Line number in wordlist to resume at.", "-R"),
     "-R"        : ([str], "Word in wordlist to resume at.", "-r"),
     "-len"      : ([int, int], "Min-max length inclusive.", "-c"),
     "-c"        : ([str], "Characters allowed in the password.", "-len"),
-    "-true"     : ([str], "String in response body if user/password is correct.", "-false, -verify"),
-    "-false"    : ([str], "String in response body if user/password is wrong.", "-true, -verify"),
+    "-true"     : ([str], "String in response body if user/password is correct.", "-false", "-verify"),
+    "-false"    : ([str], "String in response body if user/password is wrong.", "-true", "-verify"),
     "-ua"       : ([str], "Custom UserAgent string to use.", None),
     "-cookie"   : ([str], "Custom cookie to use.", None),
     "-head"     : ([str, str], "Custom HTTP header to send.", None),
     "-loot"     : ([str], "Filename to dump successful results in.", None),
-    "-verify"   : ([int], "Verify result N times.", "-true, -false"),
     #"-threads"  : ([int], "Number of parallel threads.", None),
 
     "-v"        : ([int], "Verbosity: FAIL:0, INFO:1, WARN:2, DEBUG:3", None)
@@ -63,79 +60,131 @@ CMD_LN = {
 
 
 #==================================================================================================[ CONSOLE OUTPUT ]==
-def print_main(token, indent, text, level, color):
-    """ Prints messages depending on the verbosity. Also handles message clorization and indentation.
-        Returns True if the message was printed to screen or False if the verbosity muted the output.
-    """
-    printed = (level <= VERBOSITY)
-    if printed:
-        #-- Prep strings
-        t_time = time.strftime("%H:%M:%S", time.localtime())
-        t_token = ""
-        if indent > 0:
-            t_token = INDENT_BULLETS[min([len(INDENT_BULLETS) - 1, indent - 1])].ljust(2).rjust(INDENT_WIDTH * indent)
+USE_COLOR = not "-plain" in sys.argv
+
+class Print():
+    INDENT_WIDTH = 4
+    INDENT_BULLETS = ("*", "+", "-", "")
+
+    VERBOSITY_FAIL = 0
+    VERBOSITY_WARN = 1
+    VERBOSITY_INFO = 2
+    VERBOSITY_DEBUG = 3
+
+    VERBOSITY_VALUES = {
+        VERBOSITY_FAIL  : ("FAIL", "#ff0000", "#aa0000"),
+        VERBOSITY_INFO  : ("INFO", None, None),
+        VERBOSITY_WARN  : ("WARN", "#ffff00", "#999900"),
+        VERBOSITY_DEBUG : ("DEBUG", "#0000ff", "#000099"),
+    }
+
+    @property
+    def verbosity(self) -> int:
+        return self._verbosity
+
+    @verbosity.setter
+    def verbosity(self, value : int):
+        if (value < 0) or (value > self.VERBOSITY_DEBUG):
+            #-- Error
+            self.fail("Value for verbosity needs to be between 0 and {}".format(self.VERBOSITY_DEBUG))
         else:
-            t_token = token.upper().strip()
-        t_text = text.strip()
+            self._verbosity = value
+            self.debug(f"Verbosity set to {value}.")
+
+    @property
+    def time_since_last_print(self):
+        """ Returns the time in seconds since last print. """
+        return time.now() - self.last_print_time
+
+    def __init__(self, use_color : bool, output_verbosity : int):
+        """ A class for printing in colour at different levels of verbosity. """
+        self.last_print_time = time.time()
+        self._usecolor = use_color 
+        self.verbosity = output_verbosity
+
+
+    def _output(self, text, indent, level):
+        """ Prints messages depending on the verbosity. Also handles message clorization and indentation.
+            Returns True if the message was printed to screen or False if the verbosity muted the output.
+        """
         
-        #-- Apply paint
-        if USE_COLOR:
-            t_token = "{}{}{}{}".format(colored.fg(color), colored.attr("bold"), t_token, colored.attr("reset"))
-            t_text = "{}{}{}".format(colored.fg(color), t_text, colored.attr("reset"))
-            t_time = "{}{}{}".format(colored.fg("#888888"), t_time, colored.attr("reset"))
-        
-        #-- Print product
-        # First line
-        t_text = t_text.split("\n")
-        if indent > 0:
-            print("{}{}".format(t_token, t_text[0]))
+        printed = (level <= self._verbosity)
+        if printed:
+            #-- Reset timer
+            self.last_print_time = time.time()
+
+            #-- Get default values for level
+            token, color, low_color = self.VERBOSITY_VALUES[level]
+
+            #-- Prep strings
+            t_time = time.strftime("%H:%M:%S", time.localtime())
+            t_token = ""
+            if indent > 0:
+                t_token = self.INDENT_BULLETS[min([len(self.INDENT_BULLETS) - 1, indent - 1])].ljust(2).rjust(self.INDENT_WIDTH * indent)
+            else:
+                t_token = token.upper().strip()
+            t_text = text.strip()
+            
+            #-- Apply paint
+            if self._usecolor and (not color is None):
+                t_token = "{}{}{}".format(colored.fg(color), t_token, colored.attr("reset"))
+                t_text = "{}{}{}".format(colored.fg(low_color), t_text, colored.attr("reset"))
+                t_time = "{}{}{}".format(colored.fg("#888888"), t_time, colored.attr("reset"))
+            
+            #-- Print product
+            # First line
+            t_text = t_text.split("\n")
+            if indent > 0:
+                print("{}{}".format(t_token, t_text[0]))
+            else:
+                print("[{}] {}: {}".format(t_time, t_token, t_text[0]))
+
+            # Subsequent lines
+            if len(t_text) > 1:
+                no_token = "".rjust(INDENT_WIDTH * indent) if indent > 0 else "".rjust(4 + len(t_time))
+                for i in range(1, len(t_text)):
+                    print("{} {}".format(no_token, t_text[i]))
+
+        #-- Result
+        return printed
+
+    def debug(self, text : str, indent : int = 0):
+        """ Prints a DEBUG message """
+        return self._output(text, indent, self.VERBOSITY_DEBUG)
+
+    def warn(self, text : str, indent : int = 0):
+        """ Prints a WARN message """
+        return self._output(text, indent, self.VERBOSITY_WARN)
+
+    def info(self, text : str, indent : int = 0):
+        """ Prints an INFO message """
+        return self._output(text, indent, self.VERBOSITY_INFO)
+
+    def fail(self, text : str, indent : int = 0, fatal_error : bool = True):
+        """ Prints a FAIL message """
+        printed = self._output(text, indent, self.VERBOSITY_FAIL)
+
+        if fatal_error:
+            #-- Exit
+            print("\n\n")
+            exit(0)
+
+        return printed
+
+    def splash(self, splash):
+        """ Prints the splash screen """
+        if self._usecolor:
+            fancy_splash = splash.split("\n")[0:-3]
+            fancy_version = "\n".join(splash.split("\n")[-3:])
+            i = 0
+            for i in range(len(fancy_splash)):
+                print("{}{}{}".format(colored.fg("#FF{:02x}00".format(round((200 * i) / (len(fancy_splash) - 1)))), fancy_splash[i], colored.attr("reset")))
+            print("{}{}{}".format(colored.fg("blue"), fancy_version, colored.attr("reset")))
         else:
-            print("[{}] {}: {}".format(t_time, t_token, t_text[0]))
+            print(splash)
 
-        # Subsequent lines
-        if len(t_text) > 1:
-            no_token = "".rjust(INDENT_WIDTH * indent) if indent > 0 else "".rjust(4 + len(t_time))
-            for i in range(1, len(t_text)):
-                print("{} {}".format(no_token, t_text[i]))
 
-    #-- Result
-    return printed
-
-def print_debug(text : str, indent : int = 0):
-    """ Prints a DEBUG message """
-    return print_main("DEBUG", indent, text, 3, ("#0000ff" if indent == 0 else "#000099"))
-
-def print_warn(text : str, indent : int = 0):
-    """ Prints a WARN message """
-    return print_main("WARN", indent, text, 2, ("#ffff00" if indent == 0 else "#999900"))
-
-def print_info(text : str, indent : int = 0):
-    """ Prints an INFO message """
-    return print_main("INFO", indent, text, 1, ("#aaaaaa" if indent == 0 else "#888888"))
-
-def print_fail(text : str, indent : int = 0, fatal_error : bool = True):
-    """ Prints a FAIL message """
-    printed = print_main("FAIL", indent, text, 3, ("#ff0000" if indent == 0 else "#aa0000"))
-
-    if fatal_error:
-        #-- Exit
-        print("\n\n")
-        exit(0)
-
-    return printed
-
-def print_splash():
-    """ Prints the splash screen """
-    if USE_COLOR:
-        fancy_splash = SPLASH.split("\n")[0:-3]
-        fancy_version = "\n".join(SPLASH.split("\n")[-3:])
-        i = 0
-        for i in range(len(fancy_splash)):
-            print("{}{}{}".format(colored.fg("#FF{:02x}00".format(round((200 * i) / (len(fancy_splash) - 1)))), fancy_splash[i], colored.attr("reset")))
-        print("{}{}{}".format(colored.fg("blue"), fancy_version, colored.attr("reset")))
-    else:
-        print(SPLASH)
-
+#def print_splash():
 
 #=========================================================================================================[ CLASSES ]==
 class HtmlForms(HTMLParser):
@@ -244,6 +293,8 @@ class HtmlStrings(HTMLParser):
 
 #----------------------------------------------------------------------------------------------------------------------
 class Commandline():
+
+
     #-- Properties
     @property
     def value(self) -> dict:
@@ -252,13 +303,19 @@ class Commandline():
 
 
     #-- Constructor
-    def __init__(self, help_arg : str):
+    def __init__(self, help_arg : str, sorted_help : str, use_color : bool, verbosity : int):
         """ Parses command line args. if the help-arg is supplied, it prints the help menu and exits immediately. """
+        #-- Init Output
+        self.PRINT = Print(use_color, verbosity)
+
         #-- Show splash screen
-        print_splash()
+        self.PRINT.splash(SPLASH)
         if (len(sys.argv) == 1) or (help_arg in sys.argv[1:]):
             #-- Show help and exit
             self.help()
+        elif (not sorted_help is None) and (sorted_help in sys.argv[1:]):
+            #-- Show sorted help and exit
+            self.help(sort_keys = True)
         else:
             #-- Parse command line args
             self._parsed = dict()
@@ -281,7 +338,7 @@ class Commandline():
                 self.help("The argument '{}' expects {} parameters but got {}.".format(key, length, len(unparsed) - 1))
             else:
                 values = True if length == 0 else unparsed[1:length + 1]
-                #print("{}: ['{}']".format(key.rjust(8), "', '".join(values)))
+                #self.PRINT.debug("{}: ['{}']".format(key.rjust(8), "', '".join(values)))
                 if not values is True:
                     for i in range(len(values)):
                         cast = CMD_LN[key][0][i]
@@ -334,24 +391,39 @@ class Commandline():
             result = self._parsed[key]
         return result
 
-    def help(self, text=None):
+    def help(self, text=None, sort_keys=False):
         """ Shows help with an error message (if provided). """
+        def see_also(entry):
+            """ Generates and returns a (see x, y) string. """
+            result = ""
+            if not entry[2] is None:
+                result = "  (also: " + ", ".join(entry[2:]) + ")"
+            return result
+
+        def get_syntax(key, entry):
+            """ Generates and returns a syntax string. """
+            result = key
+            if not entry is None:
+                result = result + " <{}>".format("> <".join([x.__name__ for x in entry]))
+            return result
+
+        #-- Find the longest syntax
+        longest_syntax = 0
+        for x in CMD_LN.keys():
+            syn = get_syntax(x, CMD_LN[x][0])
+            if longest_syntax < len(syn):
+                longest_syntax = len(syn)
+
+        #-- Print syntax error
         print("NOT_HYDRA HALP:")
         if not text is None:
            print("  ERROR: {}\n".format(text))
         
+        #-- Print help menu
         print("  ARGS:")
-        keys = list()
-        for x in sorted(CMD_LN.keys()):
-            y = "" if CMD_LN[x][0] is None else "<{}>".format("> <".join([x.__name__ for x in CMD_LN[x][0]]))
-            keys.append([x, y])
-
-        for key, value in keys:
-            h = CMD_LN[key][1]
-            if not CMD_LN[key][2] is None:
-                h = h + "  (also: " + CMD_LN[key][2] + ")"
-            
-            print("    {} : {}".format("{} {}".format(key, value).strip().ljust(17), h))
+        show_keys = sorted(CMD_LN.keys()) if sort_keys else CMD_LN.keys()
+        for x in show_keys:
+            print("    {} : {}{}".format(get_syntax(x, CMD_LN[x][0]).ljust(longest_syntax), CMD_LN[x][1], see_also(CMD_LN[x])))
         print("\n\n")
         exit(0)
 
@@ -384,8 +456,8 @@ def print_ips(f_badssl, proxy):
             r = requests.get(GET_IP, proxies=proxy, verify=f_badssl)
             print("  {} IP: {}".format(src, r.text.strip()))
     except requests.exceptions.RequestException as err:
-        print_fail("Trouble getting {} IP from '{}'.".format(src.lower(), GET_IP), fatal_error = False)
-        print_fail(str(err), 1)
+        PRINT.fail("Trouble getting {} IP from '{}'.".format(src.lower(), GET_IP), fatal_error = False)
+        PRINT.fail(str(err), 1)
     print("\n")
 
 
@@ -407,12 +479,12 @@ def get_test_data(test_user : tuple, url : str, ignore_ssl_errors : bool, proxy 
         #-- Perform test submissions
         L = list()
         for i in range(VERIFY):
-            r = requests.get(args.get("-url")[0], proxies=proxy, verify=f_badssl)
+            r = requests.get(args.get("-url")[0], proxies=proxy, verify=ignore_ssl_errors)
             f = HtmlForms(r.text)
             print(f.password_forms[0])
             L.append(f.password_forms)
     else:
-        print_debug("The -test flag has not been set")
+        PRINT.debug("The -test flag has not been set")
 
     return result
 
@@ -441,7 +513,7 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
         """ Makes sure value_a is not a substring of value_b """
         result = value_a
         if (not ((value_a is None) or (value_b is None))) and (value_a in value_b):
-            print_warn("Arg {0} is a substring of {1}. Arg {0} has been omitted.".format(flag_a, flag_b))
+            PRINT.warn("Arg {0} is a substring of {1}. Arg {0} has been omitted.".format(flag_a, flag_b))
             result = None
         return result
 
@@ -456,7 +528,7 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
                 i = i + 1
             if not flag:
                 result = None
-                print_warn("False-negative found in test-data for {0}, so it was omitted.".format(value_flag))
+                PRINT.warn("False-negative found in test-data for {0}, so it was omitted.".format(value_flag))
             else:
                 i = 0
                 while flag and (i < len(excludes)):
@@ -464,7 +536,7 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
                     i = i + 1
                 if not flag:
                     result = None
-                    print_warn("False-positive found in test-data for {0}, so it was omitted.".format(value_flag))
+                    PRINT.warn("False-positive found in test-data for {0}, so it was omitted.".format(value_flag))
 
         return result
 
@@ -483,40 +555,40 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
 
         if (check_t is None) and (check_f is None):
             #-- Disaster recovery: Attempt an autodetect
-            print_info("Attempting to auto-detect any unique good/bad login strings.")
+            PRINT.info("Attempting to auto-detect any unique good/bad login strings.")
             html_t, html_f = get_set_tf(test_tf)
             if (len(html_t) + len(html_f)) > 0:
                 check_t = html_t[0] if len(html_t) > 0 else None
                 check_f = html_f[0] if len(html_f) > 0 else None
-                print_info("Success!\n  -> -true: '{}'\n  -> -false: '{}'".format(check_t, check_f))
+                PRINT.info("Success!\n  -> -true: '{}'\n  -> -false: '{}'".format(check_t, check_f))
             else:
-                print_fail("Could not auto-detect a unique good/bad login string.")
+                PRINT.fail("Could not auto-detect a unique good/bad login string.")
     else:
         #-- We don't have any test-data to work with
         if (check_t is None) and (check_f is None):
-            print_fail("No valid unique good/bad login string passed. Consider using the -test arg.")
+            PRINT.fail("No valid unique good/bad login string passed. Consider using the -test arg.")
         elif (check_t is None) or (check_f is None):
-            print_warn("Only one valid good/bad login string passed. Consider using both or using the -test arg to auto-detect them.")
+            PRINT.warn("Only one valid good/bad login string passed. Consider using both or using the -test arg to auto-detect them.")
         else:
-            print_warn("The good/bad login strings weren't tested. Consider using -test arg to verify them.")
+            PRINT.warn("The good/bad login strings weren't tested. Consider using -test arg to verify them.")
 
     return (check_t, check_f)
 
 
 def get_victims(single_victim, victim_file):
     """ Builds and returns a sorted victims list. """
-    print_info("Preparing hit-list...")
+    PRINT.info("Preparing hit-list...")
     hit_list = set()
 
     if not single_victim is None:
         #-- Explicit victim
-        print_info("Added '{}' explicitly from -u.".format(single_victim[0]), 1)
+        PRINT.info("Added '{}' explicitly from -u.".format(single_victim[0]), 1)
         hit_list.add(single_victim[0])
     
     if not victim_file is None:
         #-- Read file into attack_user
         try:
-            print_info("Reading victims file: '{}'.".format(victim_file[0]))
+            PRINT.info("Reading victims file: '{}'.".format(victim_file[0]))
             f = open(victim_file[0], 'r')
             last_output = time.time()
             total = 0
@@ -531,40 +603,40 @@ def get_victims(single_victim, victim_file):
                 #-- Process
                 t_victim = line.replace("\r", "").replace("\n", "")
                 if not t_victim in hit_list:
-                    if print_debug("Added '{}'".format(t_victim), 1):
+                    if PRINT.debug("Added '{}'".format(t_victim), 1):
                         last_output = time.time()
 
                     hit_list.add(t_victim)
                 else:
-                    if print_debug("Skipped duplicate entry '{}'".format(t_victim), 1):
+                    if PRINT.debug("Skipped duplicate entry '{}'".format(t_victim), 1):
                         last_output = time.time()
 
                 if time.time() - last_output > 5:
                     last_output = time.time()
-                    print_info("Added {} entries of {} to hitlist (i'm still working, i haven't stalled)".format(len(hit_list), total))
+                    PRINT.info("Added {} entries of {} to hitlist (i'm still working, i haven't stalled)".format(len(hit_list), total))
             f.close()
 
             if len(hit_list) == 0:
-                print_fail("The file specified by -U appears to be empty.")
+                PRINT.fail("The file specified by -U appears to be empty.")
 
-            print_info("Done")
+            PRINT.info("Done")
 
         except FileNotFoundError:
-            print_fail("The file specified by -U does not exist.")
+            PRINT.fail("The file specified by -U does not exist.")
         except e:
-            print_fail("There was a problem processing the file specified:", fatal_error=False)
-            print_fail(str(e), 1)
+            PRINT.fail("There was a problem processing the file specified:", fatal_error=False)
+            PRINT.fail(str(e), 1)
 
     if len(hit_list) == 0:
-        print_fail("No target user(s) specified (help: '-u' or '-U')")
+        PRINT.fail("No target user(s) specified (help: '-u' or '-U')")
 
     #-- Finish up
     if len(hit_list) == 1:
         hit_list = list(hit_list)
     else:
-        print_info("Sorting hit-list...", 1)
+        PRINT.info("Sorting hit-list...", 1)
         hit_list = sorted(hit_list)
-    print_info("Hit-list with [{}] name{} ready.".format(len(hit_list), ("" if len(hit_list) == 1 else "s")))
+    PRINT.info("Hit-list with [{}] name{} ready.".format(len(hit_list), ("" if len(hit_list) == 1 else "s")))
 
     #-- Result
     return hit_list
@@ -572,17 +644,18 @@ def get_victims(single_victim, victim_file):
 #============================================================================================================[ MAIN ]==
 #   - https://kushaldas.in/posts/using-python-to-access-onion-network-over-socks-proxy.html
 
-args = Commandline("-h")
+args = Commandline("-h", "-H", USE_COLOR, DEFAULT_VERBOSITY)
+PRINT = Print(USE_COLOR, DEFAULT_VERBOSITY)
 
 if is_online():
     #-- Override Constants and Defaults
     GET_IP = args.get("-getip") if args.is_set("-getip") else GET_IP
     VERIFY = args.get("-verify") if args.is_set("-verify") and (args.get("-verify") > 0) else VERIFY
     
-    if args.is_set("-v") and (args.get("-v") in [0, 1, 2, 3]):
-        VERBOSITY = args.get("-v")
+    if args.is_set("-v") and (args.get("-v") in range(Print.VERBOSITY_FAIL, Print.VERBOSITY_DEBUG)):
+        Print.verbosity = args.get("-v")
     elif args.is_set("-v"):
-        print_info("Arg -v has a value of '{}' but needs to be between 0 and 3 (inclusive).".format(args.get("-v")))
+        PRINT.info("Arg -v has a value of '{}' but needs to be between 0 and 3 (inclusive).".format(args.get("-v")))
 
     #-- Set flags
     f_badssl = args.is_set("-badssl")
@@ -590,11 +663,11 @@ if is_online():
     #-- Set up the socks5 proxy
     proxy = None
     if args.is_set("-tor"):
-        print_debug("Using Tor [ {} ]".format(args.value["-tor"][0]))
+        PRINT.debug("Using Tor [ {} ]".format(args.value["-tor"][0]))
         tor_socks = "socks5h://{}".format(args.value["-tor"][0])
         proxy = { "http": tor_socks, "https": tor_socks, "ftp": tor_socks }
     else:
-        print_warning("Not using Tor")
+        PRINT.warn("Not using Tor")
 
 
     #-- Main
@@ -610,6 +683,6 @@ if is_online():
         #-- Attack!
         # TODO
     else:
-        print_fail("You need to specify a target site with -url.")
+        PRINT.fail("You need to specify a target site with -url.")
 else:
-    print_fail("You need an internet connection to use NotHydra.")
+    PRINT.fail("You need an internet connection to use NotHydra.")
