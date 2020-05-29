@@ -64,8 +64,11 @@ CMD_LN = {
 
 #==================================================================================================[ CONSOLE OUTPUT ]==
 def print_main(token, indent, text, level, color):
-    """ Prints messages depending on the verbosity. Also handles message clorization and indentation. """
-    if level <= VERBOSITY:
+    """ Prints messages depending on the verbosity. Also handles message clorization and indentation.
+        Returns True if the message was printed to screen or False if the verbosity muted the output.
+    """
+    printed = (level <= VERBOSITY)
+    if printed:
         #-- Prep strings
         t_time = time.strftime("%H:%M:%S", time.localtime())
         t_token = ""
@@ -88,26 +91,30 @@ def print_main(token, indent, text, level, color):
         else:
             print("[{}] {}: {}".format(t_time, t_token, t_text))
 
+    return printed
+
 def print_debug(text : str, indent : int = 0):
     """ Prints a DEBUG message """
-    print_main("DEBUG", indent, text, 3, ("#0000ff" if indent == 0 else "#000099"))
+    return print_main("DEBUG", indent, text, 3, ("#0000ff" if indent == 0 else "#000099"))
 
 def print_warn(text : str, indent : int = 0):
     """ Prints a WARN message """
-    print_main("WARN", indent, text, 2, ("#ffff00" if indent == 0 else "#999900"))
+    return print_main("WARN", indent, text, 2, ("#ffff00" if indent == 0 else "#999900"))
 
 def print_info(text : str, indent : int = 0):
     """ Prints an INFO message """
-    print_main("INFO", indent, text, 1, ("#aaaaaa" if indent == 0 else "#888888"))
+    return print_main("INFO", indent, text, 1, ("#aaaaaa" if indent == 0 else "#888888"))
 
 def print_fail(text : str, indent : int = 0, fatal_error : bool = True):
     """ Prints a FAIL message """
-    print_main("FAIL", indent, text, 3, ("#ff0000" if indent == 0 else "#aa0000"))
+    printed = print_main("FAIL", indent, text, 3, ("#ff0000" if indent == 0 else "#aa0000"))
 
     if fatal_error:
         #-- Exit
         print("\n\n")
         exit(0)
+
+    return printed
 
 def print_splash():
     """ Prints the splash screen """
@@ -490,34 +497,49 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
 
 def get_victims(single_victim, victim_file):
     """ Builds and returns a sorted victims list. """
-    print_debug("Preparing hit-list...")
+    print_info("Preparing hit-list...")
     hit_list = set()
 
     if not single_victim is None:
         #-- Explicit victim
-        if not single_victim[0] in hit_list:
-            print_debug("Added '{}'".format(single_victim[0]), 1)
-            hit_list.add(single_victim[0])
+        print_info("Added '{}' explicitly from -u.".format(single_victim[0]), 1)
+        hit_list.add(single_victim[0])
     
     if not victim_file is None:
         #-- Read file into attack_user
         try:
-            print_debug("Reading victims file: '{}'.".format(victim_file[0]))
+            print_info("Reading victims file: '{}'.".format(victim_file[0]))
             f = open(victim_file[0], 'r')
-            while True: 
+            last_output = time.time()
+            total = 0
+            while True:
+                #- Read
                 line = file.readline()
                 if not line: 
+                    #-- EOF
                     break
+                total = total + 1
+
+                #-- Process
                 t_victim = line.replace("\r", "").replace("\n", "")
                 if not t_victim in hit_list:
-                    print_debug("Added '{}'".format(t_victim), 1)
+                    if print_debug("Added '{}'".format(t_victim), 1):
+                        last_output = time.time()
+
                     hit_list.add(t_victim)
                 else:
-                    print_debug("Skipped duplicate entry '{}'".format(t_victim), 1)
+                    if print_debug("Skipped duplicate entry '{}'".format(t_victim), 1):
+                        last_output = time.time()
+
+                if time.time() - last_output > 5:
+                    last_output = time.time()
+                    print_info("Added {} entries of {} to hitlist (i'm still working, i haven't stalled)".format(len(hit_list), total))
             f.close()
 
             if len(hit_list) == 0:
                 print_fail("The file specified by -U appears to be empty.")
+
+            print_info("Done")
 
         except FileNotFoundError:
             print_fail("The file specified by -U does not exist.")
@@ -532,10 +554,11 @@ def get_victims(single_victim, victim_file):
     if len(hit_list) == 1:
         hit_list = list(hit_list)
     else:
-        print_debug("Sorting hit-list...", 1)
+        print_info("Sorting hit-list...", 1)
         hit_list = sorted(hit_list)
-    print_debug("Hit-list with [{}] name{} ready.".format(len(hit_list), ("" if len(hit_list) == 1 else "s")))
+    print_info("Hit-list with [{}] name{} ready.".format(len(hit_list), ("" if len(hit_list) == 1 else "s")))
 
+    #-- Result
     return hit_list
 
 #============================================================================================================[ MAIN ]==
@@ -568,14 +591,12 @@ if is_online():
         print_ips(f_badssl, proxy)
     elif args.is_set("-url"):
         #-- Prepare for an attack
-        victims = get_victims(args.get("-u"), args.get("-U"))
+        hit_list = get_victims(args.get("-u"), args.get("-U"))
         test_data = get_test_data(args.get("-test"), args.get("-url"), f_badssl, proxy)
         str_true, str_false = get_truefalse(args.get("-true"), args.get("-false"), test_data)
 
         #-- Attack!
-        if good_to_go:
-            # TODO
-            pass
+        # TODO
     else:
         print_fail("You need to specify a target site with -url.")
 else:
