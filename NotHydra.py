@@ -203,7 +203,7 @@ class HtmlForms(HTMLParser):
         if self._L is None:
             self._L = list()
             for form in self._forms:
-                if not form[0] is None:
+                if not form[0] is False:
                     self._L.append(form)
 
         return self._L
@@ -222,10 +222,16 @@ class HtmlForms(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         """ Parse opening/standalone tags
+
+            Form list explained:
+                [0] password input name
+                [1] text input name(s)
+                [2] form opening tag
+                [3] form kvps           -> name : {}
         """
         if tag == "form":
             self._is_in_form = True
-            self._forms.append([False, {  k : v for k,v in attrs }])
+            self._forms.append([False, [], {  k : v for k,v in attrs }, {}])
         elif self._is_in_form and ("name" in [ k  for k, v in attrs ]):
             tag_name = None
             tag_type = None
@@ -240,8 +246,9 @@ class HtmlForms(HTMLParser):
 
             if (tag_type == "password"):
                 self._forms[-1][0] = tag_name
-
-            self._forms[-1].append(dict({tag_name:tag_value, "type":tag_type}))
+            elif (tag_type == "text"):
+                self._forms[-1][1].append(tag_name)
+            self._forms[-1][3][tag_name] = {"value" : tag_value, "type" : tag_type}
 
         return
 
@@ -483,7 +490,7 @@ def form_submit(form : tuple, ignore_ssl_errors : bool, proxy : tuple, **kwargs)
     """
 
 def do_login(url : str, username : str, password : str, ignore_ssl_errors : bool, proxy : tuple) -> str:
-    """ Gets the http form and performs a login. """
+    """ Gets the first HTML form containing a password input, performs a login and returns the resulting HTML. """
     result = None
     PRINT.debug(f"Performing login for '{username}' with password '{password}'...")
     
@@ -496,7 +503,7 @@ def do_login(url : str, username : str, password : str, ignore_ssl_errors : bool
         PRINT.debug(str(form))
         result = form
 
-    xxx return result
+    return result
 
 def get_test_data(url : str, test_user : tuple, verify_count : int, ignore_ssl_errors : bool, proxy : tuple) -> list:
     """ If a test-user is provided, return a list containing [[GOOD], [BAD]] login results. """
