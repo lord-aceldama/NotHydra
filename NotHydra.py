@@ -7,6 +7,11 @@ import sys
 import time
 
 
+#============================================================================================================[ TO DO ]==
+# Flesh out true/false login string detection to work by tag, rather than by line
+# Incorporate retries into true/false login string detection
+
+
 #=================================================================================================[ GLOBAL CONSTANTS ]==
 VERSION = "0.9.0"
 SPLASH = """
@@ -37,24 +42,26 @@ CMD_LN = {
     "-tor"      : ([str], "The TOR control ip and port, eg. localhost:9050", "-ip"),
     "-url"      : ([str], "The url containing the login form. (required)", None),
     "-plain"    : (None, "Disables terminal colors for terminals that doesn't support it.", None),
-    "-test"     : ([str, str], "A valid user/pass combination to test.", None),
-    "-u"        : ([str], "The user to target.", "-U"),
+    "-test"     : ([str, str], "A valid user/pass combination to test.", "-verify"),
+    "-true"     : ([str], "String in response body if user/password is correct.", "-false", "-verify"),# "-delim"),
+    "-false"    : ([str], "String in response body if user/password is wrong.", "-true", "-verify"),# "-delim"),
+    "-u"        : ([str], "The user to target.", "-U"),# "-delim"),
     "-U"        : ([str], "A file with a list of users to target.", "-u"),
     "-verify"   : ([int], "Verify result N times.", "-true", "-false"),
 
-    "-w"        : ([str], "A file with a list of passwords to test.", "-W"),
+    #"-len"      : ([int, int], "Min-max length inclusive.", "-c"),
+    #"-c"        : ([str], "Characters allowed in the password.", "-len"),
+    #"-delim"    : ([str], "Specifies a delimeter to use to separate strings.", None),
+    #"-w"        : ([str], "A file with a list of passwords to test.", "-W"),
     #"-W"        : ([str], "A url containing a list of passwords to test.", "-w"),
-    "-r"        : ([int], "Line number in wordlist to resume at.", "-R"),
-    "-R"        : ([str], "Word in wordlist to resume at.", "-r"),
-    "-len"      : ([int, int], "Min-max length inclusive.", "-c"),
-    "-c"        : ([str], "Characters allowed in the password.", "-len"),
-    "-true"     : ([str], "String in response body if user/password is correct.", "-false", "-verify"),
-    "-false"    : ([str], "String in response body if user/password is wrong.", "-true", "-verify"),
-    "-ua"       : ([str], "Custom UserAgent string to use.", None),
-    "-cookie"   : ([str], "Custom cookie to use.", None),
-    "-head"     : ([str, str], "Custom HTTP header to send.", None),
-    "-loot"     : ([str], "Filename to dump successful results in.", None),
+    #"-r"        : ([int], "Line number in wordlist to resume at.", "-R"),
+    #"-R"        : ([str], "Word in wordlist to resume at.", "-r"),
+    #"-ua"       : ([str], "Custom UserAgent string to use.", None),
+    #"-cookie"   : ([str], "Custom cookie to use.", None),
+    #"-head"     : ([str, str], "Custom HTTP header to send.", None),
+    #"-loot"     : ([str], "Filename to dump successful results in.", None),
     #"-threads"  : ([int], "Number of parallel threads.", None),
+    #"-retry"    : ([int, int], "The amount of attempts to make if an HTTP error occurs and the number of seconds to wait.", None),
 
     "-v"        : ([int], "Verbosity: FAIL:0, INFO:1, WARN:2, DEBUG:3", None)
 }
@@ -222,16 +229,16 @@ class HtmlForms(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         """ Parse opening/standalone tags
-
             Form list explained:
                 [0] password input name
                 [1] text input name(s)
                 [2] form opening tag
-                [3] form kvps           -> name : {}
+                [3] form tag name=value kvps
+                [4] form tag name=type kvps
         """
         if tag == "form":
             self._is_in_form = True
-            self._forms.append([False, [], {  k : v for k,v in attrs }, {}])
+            self._forms.append([False, [], {  k : v for k,v in attrs }, {}, {}])
         elif self._is_in_form and ("name" in [ k  for k, v in attrs ]):
             tag_name = None
             tag_type = None
@@ -248,7 +255,8 @@ class HtmlForms(HTMLParser):
                 self._forms[-1][0] = tag_name
             elif (tag_type == "text"):
                 self._forms[-1][1].append(tag_name)
-            self._forms[-1][3][tag_name] = {"value" : tag_value, "type" : tag_type}
+            self._forms[-1][3][tag_name] = tag_value
+            self._forms[-1][4][tag_name] = tag_type
 
         return
 
@@ -476,7 +484,7 @@ def form_get(url : str, proxy, ignore_ssl_errors : bool) -> tuple:
     try:
         r = requests.get(args.get("-url")[0], proxies=proxy, verify=ignore_ssl_errors)
         f = HtmlForms(r.text)
-        PRINT.debug(str(f.password_forms[0]))
+        #PRINT.debug(str(f.password_forms[0]))
         result = f.password_forms
 
     except:
@@ -485,23 +493,82 @@ def form_get(url : str, proxy, ignore_ssl_errors : bool) -> tuple:
     return result
 
 
-def form_submit(form : tuple, ignore_ssl_errors : bool, proxy : tuple, **kwargs) -> tuple:
+def form_submit(form : dict, ignore_ssl_errors : bool, proxy : tuple, **kwargs) -> tuple:
     """ Submits an HTML form and retuens the headers, cookies and response body as a tuple(dict, dict, str).
     """
+    result = None
+
+    try:
+        if form["method"].lower() == "post":
+            r = requests.post(form["action"], proxies=proxy, verify=ignore_ssl_errors, data=kwargs)
+        else:
+            r = requests.get(form["action"], proxies=proxy, verify=ignore_ssl_errors, data=kwargs)
+
+        #f = HtmlForms(r.text)
+        #PRINT.debug(str(f.password_forms[0]))
+        result = r.text
+
+    except Exception as e:
+        result = False
+
+    return result
 
 def do_login(url : str, username : str, password : str, ignore_ssl_errors : bool, proxy : tuple) -> str:
     """ Gets the first HTML form containing a password input, performs a login and returns the resulting HTML. """
     result = None
-    PRINT.debug(f"Performing login for '{username}' with password '{password}'...")
+    PRINT.info(f"Performing login for '{username}' with password '{password}'...")
     
     #-- Get the login form
-    PRINT.debug("Getting HTML form from '{url}'...", 1)
+    PRINT.debug(f"Getting HTML form from '{url[0]}'...", 1)
     form = form_get(url, proxy, ignore_ssl_errors)
     if form is None:
         PRINT.debug("Error getting form.")
     else:
-        PRINT.debug(str(form))
-        result = form
+        #-- We got at least one password form
+        #-- Find first password form that only has one text input
+        frm_valid = []
+        frm_captcha = []
+        frm_other = []
+        frm_id = None
+        for i in range(len(form)):
+            if len(form[i][1]) == 1:
+                #-- Valid login form with two entry fields
+                frm_id = "Valid login"
+                frm_valid.append(i)
+            elif len(form[i][1]) == 2:
+                #-- Possible captcha form
+                frm_id = "Recaptcha?"
+                frm_captcha.append(i)
+            else:
+                #-- I don't know
+                frm_id = "Unknown"
+                frm_other.append(i)
+            PRINT.debug(f"{frm_id} -> {form[0][2]}", 1)
+
+        if len(frm_valid) >= 1:
+            #-- We have a valid login form 
+            if len(frm_valid) > 1:
+                PRINT.debug("Multiple login forms detected, so using the first one.")
+
+            #-- Resolve the form action
+            frm_tag = form[frm_valid[0]][2]
+            frm_tag["action"] = requests.compat.urljoin(url[0], frm_tag["action"])
+
+            #-- Fill out the form
+            frm_data = dict(form[frm_valid[0]][3])
+            frm_data[form[frm_valid[0]][1][0]] = username
+            frm_data[form[frm_valid[0]][0]] = password
+
+            #-- Submit the form
+            result = form_submit(frm_tag, ignore_ssl_errors, proxy, **frm_data)
+        elif len(frm_captcha) >= 1:
+            #-- We have a recaptcha
+            PRINT.warn("Solving recaptchas automatically is not yet supported.")
+        else:
+            PRINT.warn("Could not find a valid login form.")
+
+        #PRINT.debug(str(form[0][2]))
+        #result = form
 
     return result
 
@@ -516,15 +583,13 @@ def get_test_data(url : str, test_user : tuple, verify_count : int, ignore_ssl_e
         #-- Perform test submissions
         P = list()
         while len(result[0]) < verify_count:
-            #-- Generate bad password
+            #-- Do bad login
             badpass = None
             while (badpass is None) or (badpass == test_user[1])  or (badpass in P):
                 badpass = ""
                 for i in range(8):
                     badpass = badpass + random.choice("abcdefghijklmnopqrstuvwxyz")
             P.append(badpass)
-
-            #-- Do bad login
             result[1].append(do_login(url, test_user[0], badpass, ignore_ssl_errors, proxy))
 
             #-- Do good login
@@ -542,18 +607,23 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
         """ Returns True if value is zero-length string or None. """
         return (value is None) or (len(value) == 0)
 
-    def get_set_tf(test_tf):
+    def get_or_autodetect_tf(test_tf):
         """ Returns sets unique to true or false logins. """
         def get_set_intersection(text):
             """ Returns a set of all similar lines in given text lists. """
-            result = set(text[0].replace("\r", "").split("\n"))
-            for i in range(1, len(text[0])):
-                result = set(text[0][i]).intersection(result)
+            result = set([x.strip() for x in text[0].replace("\r", "").split("\n")])
+            for i in range(1, len(text)):
+                set_test = set([x.strip() for x in text[i].replace("\r", "").split("\n")])
+                result = set_test.intersection(result)
             return result
         html_t = get_set_intersection(test_tf[0])
         html_f = get_set_intersection(test_tf[1])
 
-        return (html_t.difference(html_f), html_f.difference(html_t))
+        result = [
+            sorted(html_t.difference(html_f)), 
+            sorted(html_f.difference(html_t))
+        ]
+        return result
 
     def check_subset(value_a, value_b, flag_a, flag_b):
         """ Makes sure value_a is not a substring of value_b """
@@ -602,7 +672,7 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
         if (check_t is None) and (check_f is None):
             #-- Disaster recovery: Attempt an autodetect
             PRINT.info("Attempting to auto-detect any unique good/bad login strings.")
-            html_t, html_f = get_set_tf(test_tf)
+            html_t, html_f = get_or_autodetect_tf(test_tf)
             if (len(html_t) + len(html_f)) > 0:
                 check_t = html_t[0] if len(html_t) > 0 else None
                 check_f = html_f[0] if len(html_f) > 0 else None
