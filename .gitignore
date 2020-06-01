@@ -1,4 +1,4 @@
-.vs
-.git
+/.vs
+/.git
+/env
 *.pyproj
-venv
