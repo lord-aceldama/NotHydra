@@ -44,7 +44,7 @@ color_header "Done!"
 
 color_header "Installing pip dependencies..."
 . venv/bin/activate
-pip install -r requirements.txt
+pip install --default-timeout=100 -r requirements.txt
 deactivate
 color_header "Done!"
 color_header "Installation complete! :)"
