@@ -48,12 +48,12 @@ CMD_LN = {
     "-u"        : ([str], "The user to target.", "-U"),# "-delim"),
     "-U"        : ([str], "A file with a list of users to target.", "-u"),
     "-verify"   : ([int], "Verify result N times.", "-true", "-false"),
+    #"-w"        : ([str], "A file with a list of passwords to test.", "-W"),
+    #"-W"        : ([str], "A url containing a list of passwords to test.", "-w"),
 
     #"-len"      : ([int, int], "Min-max length inclusive.", "-c"),
     #"-c"        : ([str], "Characters allowed in the password.", "-len"),
     #"-delim"    : ([str], "Specifies a delimeter to use to separate strings.", None),
-    #"-w"        : ([str], "A file with a list of passwords to test.", "-W"),
-    #"-W"        : ([str], "A url containing a list of passwords to test.", "-w"),
     #"-r"        : ([int], "Line number in wordlist to resume at.", "-R"),
     #"-R"        : ([str], "Word in wordlist to resume at.", "-r"),
     #"-ua"       : ([str], "Custom UserAgent string to use.", None),
@@ -637,22 +637,15 @@ def get_truefalse(str_true : str, str_false: str, test_tf : list) -> tuple:
         """ Make sure value is found in contains, but not found in excludes. """
         result = value
         if not value is None:
-            flag = True
             i = 0
-            while flag and (i < len(contains)):
-                flag = value in contains[i]
-                i = i + 1
-            if not flag:
-                result = None
-                PRINT.warn("False-negative found in test-data for {0}, so it was omitted.".format(value_flag))
-            else:
-                i = 0
-                while flag and (i < len(excludes)):
-                    flag = not value in excludes[i]
-                    i = i + 1
-                if not flag:
+            while (not result is None) and ((i < len(contains)) or (i < len(excludes))):
+                if not value in contains[i if i < len(contains) else len(contains)]:
+                    result = None
+                    PRINT.warn("False-negative found in test-data for {0}, so it was omitted.".format(value_flag))
+                if value in excludes[i if i < len(excludes) else len(excludes)]:
                     result = None
                     PRINT.warn("False-positive found in test-data for {0}, so it was omitted.".format(value_flag))
+                i = i + 1
 
         return result
 
