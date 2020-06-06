@@ -306,9 +306,116 @@ class HtmlStrings(HTMLParser):
 
 
 #-----------------------------------------------------------------------------------------------------------------------
+class FakeBrowser():
+    #-- Properties
+    # To Do
+
+
+    #-- Constructor
+    def __init__(self, url:str, proxy, ignore_ssl_errors:bool, retry:tuple, tf:tuple, cookies:dict, headers:dict):
+        """ X """
+        #-- Set default values
+        self.url = url
+        self.tf = tuple(tf)
+        self.proxy = proxy
+        self.silent_ssl = ignore_ssl_errors
+        self.retry = retry
+        self.cookies = dict(cookies)
+        self.headers = dict(headers)
+
+
+    #-- Private Methods
+    def reset_session(self):
+        """ Starts a new requests session. """
+        self.session = requests.session()
+        self.session.proxies = self.proxy
+        self.session.verify = self.silent_ssl
+        self.session.cookies = self.cookies
+        self.session.headers = self.headers
+        self.form = None
+    
+    
+    def step1_get_form(self):
+        """ Starts a new session and gets the login form. """
+        result = False
+        self.reset_session()
+        PRINT.debug("Getting login form...", 1)
+        try:
+            r = self.session.get(self.url)
+            f = HtmlForms(r.text).password_forms
+        except e as Exception:
+            PRINT.debug("Failed to get the login form:", 1)
+            PRINT.debug(f"ERR: {e}", 2)
+
+        if not f is None:
+            f = f[0]
+            try:
+                self.form = list(f)
+                self.form_action = requests.compat.urljoin(self.url, f[2]["action"])
+                self.form_method = f[2]["method"].lower()
+                self.form_input_pass = f"{f[0]}"
+                self.form_input_text = list(f[1])
+                self.form_data = dict(f[3])
+                result = True
+                PRINT.debug("Done!", 1)
+            except e as Exception:
+                self.form = None
+                PRINT.debug("Failed to parse the login form:", 1)
+                PRINT.debug(f"ERR: {e}", 2)
+
+        return result
+
+
+    def step2_submit_form(self, username:str, password:str):
+        """ Starts a new session and gets the login form. """
+        result = False
+        PRINT.debug("Submitting form...", 1)
+        try:
+            r = None
+            if self.form_method == "post":
+                r = self.session.post(self.form_action, data=self.form_data)
+            else:
+                r = self.session.get(self.form_action, data=self.form_data)
+            result = r.text
+            PRINT.debug("Done!", 1)
+
+        except e as Exception:
+            PRINT.debug("Failed to submit the login form:", 1)
+            PRINT.debug(f"ERR: {e}", 2)
+
+        return result
+
+
+    #-- Public Methods
+    def login(self, username:str, password:str) -> tuple:
+        """ Gets the HTML form from a given page
+        """
+        def retry_wrapper(self, callback, *args, **kwargs):
+            """ Wraps a function in a loop that tries until it gets a good result. """
+            retries = 0
+            result = False
+            while (result is False) and (retries < self.retry[0]):
+                result = callback(*args, **kwargs)
+                if result is False:
+                    retries = retries + 1
+                    if (retries < self.retry[0]):
+                        PRINT.debug(f"Failed attempt {retries} of {self.retry[0]}. Retrying in {self.retry[1]} seconds...", 1)
+                        time.sleep(self.retry[1])
+                    else:
+                        PRINT.warn(f"Failed {self.retry[0]} attempts. Giving up.", 0)
+
+            return result
+
+        result = None
+        PRINT.info("Logging in user '{}' with password '{}'...".format(username, "*" * len(password)))
+        if self.retry_wrapper(self, self.step1_get_form):
+            result = self.retry_wrapper(self, self.step2_submit_form, username, password)
+
+        return result
+
+
+#-----------------------------------------------------------------------------------------------------------------------
 class Commandline():
-
-
     #-- Properties
     @property
     def value(self) -> dict:
@@ -574,6 +681,14 @@ def do_login(url : str, username : str, password : str, ignore_ssl_errors : bool
 
 def get_test_data(url : str, test_user : tuple, verify_count : int, ignore_ssl_errors : bool, proxy : tuple) -> list:
     """ If a test-user is provided, return a list containing [[GOOD], [BAD]] login results. """
+    def get_bad_pass(valid_pass, tested_passes, length):
+        badpass = None
+        while (badpass is None) or (badpass == valid_pass)  or (badpass in tested_passes):
+            badpass = ""
+            for i in range(length):
+                badpass = badpass + random.choice("abcdefghijklmnopqrstuvwxyz0123456789")
+        return badpass
+
     result = None
 
     if not test_user is None:
@@ -581,16 +696,11 @@ def get_test_data(url : str, test_user : tuple, verify_count : int, ignore_ssl_e
         result = [[], []]
 
         #-- Perform test submissions
-        P = list()
+        bad_passes = list()
         while len(result[0]) < verify_count:
             #-- Do bad login
-            badpass = None
-            while (badpass is None) or (badpass == test_user[1])  or (badpass in P):
-                badpass = ""
-                for i in range(8):
-                    badpass = badpass + random.choice("abcdefghijklmnopqrstuvwxyz")
-            P.append(badpass)
-            result[1].append(do_login(url, test_user[0], badpass, ignore_ssl_errors, proxy))
+            bad_passes.append(get_bad_pass(test_user[1], bad_passes))
+            result[1].append(do_login(url, test_user[0], bad_passes[-1], ignore_ssl_errors, proxy))
 
             #-- Do good login
             result[0].append(do_login(url, test_user[0], test_user[1], ignore_ssl_errors, proxy))
